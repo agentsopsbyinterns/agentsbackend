@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Profile</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+      .card { max-width: 720px; margin: 0 auto; padding: 2rem; border: 1px solid #ddd; border-radius: 8px; }
+      .actions { margin-top: 1rem; display: flex; gap: 0.75rem; }
+      .btn { padding: 0.6rem 1rem; border-radius: 6px; border: 1px solid #999; background: #f8f8f8; cursor: pointer; text-decoration: none; color: #111; }
+      .btn-danger { background: #d93025; color: #fff; border-color: #d93025; }
+      .row { display: flex; gap: 1.5rem; align-items: center; }
+      img { border-radius: 50%; width: 96px; height: 96px; object-fit: cover; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Your Profile</h1>
+      <div class="row">
+        <% if (photo) { %>
+          <img src="<%= photo %>" alt="Profile Photo" />
+        <% } %>
+        <div>
+          <p><strong>Name:</strong> <%= name %></p>
+          <p><strong>Email:</strong> <%= email %></p>
+          <p><strong>Provider:</strong> <%= provider %></p>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="/">Home</a>
+        <a class="btn btn-danger" href="/logout">Logout</a>
+      </div>
+    </div>
+    <script>
+      if (window.trustedTypes && window.trustedTypes.createPolicy) {
+        try {
+          window.trustedTypes.createPolicy('default', {
+            createHTML: (s) => s,
+            createScript: (s) => s,
+            createScriptURL: (s) => s
+          });
+        } catch (e) {}
+      }
+    </script>
+  </body>
+</html>
