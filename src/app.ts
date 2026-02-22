@@ -1,6 +1,7 @@
 import Fastify, { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
 import fastifyExpress from '@fastify/express';
+import cors from '@fastify/cors';
 import session from 'express-session';
 import passport from 'passport';
 import { env, isProd } from './config/env';
@@ -13,6 +14,14 @@ export async function buildApp() {
     logger: true
   });
 
+  await app.register(cors, {
+  origin: [
+    "http://localhost:5173",
+    "https://frontend.leavecode.co.in"
+  ],
+  credentials: true
+});
+  
   await app.register(cookie, {
     secret: undefined,
     hook: 'onRequest'
