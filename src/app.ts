@@ -92,5 +92,16 @@ app.get("/login", async (request, reply) => {
   });
 });
 
+// ✅ TEMP CHAT API (testing ke liye)
+app.post("/chat", async (request, reply) => {
+  const body: any = request.body;
+
+  return reply.send({
+    success: true,
+    message: "Backend connected successfully ✅",
+    userMessage: body?.message || null
+  });
+});
+
   return app;
 }
