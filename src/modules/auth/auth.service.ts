@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma/client';
+import type { Prisma } from '@prisma/client';
 import { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema';
 import { hashPassword, verifyPassword } from '../../common/utils/password';
 import { generateRandomToken, sha256, signAccessToken } from '../../common/utils/tokens';
@@ -12,7 +13,7 @@ export async function signup(input: SignupInput) {
     throw conflict('Email already in use');
   }
   const passwordHash = await hashPassword(input.password);
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const org = await tx.organization.create({ data: { name: input.organizationName } });
     const user = await tx.user.create({
       data: {
@@ -130,7 +131,7 @@ export async function resetPassword(input: ResetPasswordInput) {
     throw badRequest('Invalid or expired token');
   }
   const newHash = await hashPassword(input.newPassword);
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.user.update({ where: { id: record.userId }, data: { passwordHash: newHash } });
     await tx.passwordResetToken.update({ where: { id: record.id }, data: { used: true } });
     await tx.refreshToken.deleteMany({ where: { userId: record.userId } });

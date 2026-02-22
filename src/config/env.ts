@@ -24,6 +24,12 @@ const envSchema = z.object({
 
   APP_URL: z.string().url().default('http://localhost:3000'),
 
+  GOOGLE_CLIENT_ID: z.string().min(1),
+  GOOGLE_CLIENT_SECRET: z.string().min(1),
+  FACEBOOK_APP_ID: z.string().min(1),
+  FACEBOOK_APP_SECRET: z.string().min(1),
+  SESSION_SECRET: z.string().min(16),
+
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
