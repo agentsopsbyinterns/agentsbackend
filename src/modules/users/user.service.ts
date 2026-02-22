@@ -1,5 +1,5 @@
 import { prisma } from '../../prisma/client';
-import { Role } from '@prisma/client';
+type UserRole = 'ADMIN' | 'PM' | 'MEMBER';
 
 export async function findByEmail(email: string) {
   return prisma.user.findUnique({ where: { email } });
@@ -14,7 +14,7 @@ export async function createUser(input: {
   name: string;
   passwordHash: string;
   organizationId: string;
-  role?: Role;
+  role?: UserRole;
 }) {
   return prisma.user.create({
     data: {

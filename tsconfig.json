@@ -10,7 +10,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node", "@fastify/cookie"],
+    "types": ["node"],
     "lib": ["ES2020"]
   },
   "include": ["src/**/*"]

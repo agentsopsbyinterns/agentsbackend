@@ -24,6 +24,8 @@ model User {
   role                Role                 @default(ADMIN)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
+  googleId            String?              @unique
+  facebookId          String?              @unique
   passwordResetTokens PasswordResetToken[]
   refreshTokens       RefreshToken[]
   organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
