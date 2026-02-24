@@ -1,0 +1,260 @@
+You are a senior backend engineer.
+
+Build the AUTHENTICATION SYSTEM for a multi-tenant SaaS called AGENTOPS AI.
+
+Stack:
+
+- Node.js
+- TypeScript
+- Fastify (preferred, otherwise Express)
+- Prisma ORM
+- PostgreSQL
+- JWT (access + refresh)
+- Argon2 password hashing
+- Zod validation
+- Nodemailer (or equivalent) for forgot/reset password emails
+- dotenv
+- cookie-based refresh tokens
+- REST API
+
+Goal:
+
+Create FULL auth infrastructure:
+
+- Signup
+- Login
+- Logout
+- Refresh token
+- Forgot password
+- Reset password
+- Get current user (/auth/me)
+- Organization auto-creation on signup
+- Role-based access (ADMIN by default)
+
+Use clean architecture:
+
+backend/
+  src/
+    app.ts
+    server.ts
+
+    config/
+      env.ts
+      jwt.ts
+      mail.ts
+
+    prisma/
+      schema.prisma
+
+    modules/
+      auth/
+        auth.controller.ts
+        auth.service.ts
+        auth.routes.ts
+        auth.schema.ts
+
+      users/
+        user.service.ts
+
+      organizations/
+        org.service.ts
+
+    common/
+      middleware/
+        auth.middleware.ts
+        rbac.middleware.ts
+      utils/
+        tokens.ts
+        password.ts
+        mailer.ts
+      errors/
+        api-error.ts
+
+    jobs/ (empty for now)
+
+  prisma/
+    migrations/
+
+.env
+package.json
+tsconfig.json
+
+----------------------------------------------------
+
+DATABASE (PrISMA):
+
+User:
+- id (cuid)
+- organizationId
+- email UNIQUE
+- passwordHash
+- name
+- role (ADMIN | PM | MEMBER)
+- createdAt
+- updatedAt
+
+Organization:
+- id
+- name
+- createdAt
+- updatedAt
+
+PasswordResetToken:
+- id
+- userId
+- token HASHED
+- expiresAt
+- used Boolean
+
+RefreshToken:
+- id
+- userId
+- token HASHED
+- expiresAt
+
+----------------------------------------------------
+
+AUTH FLOWS:
+
+SIGNUP:
+POST /auth/signup
+
+Input:
+{
+  name,
+  email,
+  password,
+  organizationName
+}
+
+Steps:
+1. Validate input (Zod)
+2. Hash password with Argon2
+3. Create Organization
+4. Create User (ADMIN)
+5. Issue JWT access token (15m)
+6. Issue refresh token (7d) stored in DB + httpOnly cookie
+7. Return user + accessToken
+
+----------------------------------------------------
+
+LOGIN:
+POST /auth/login
+
+1. Verify email/password
+2. Issue new access + refresh tokens
+3. Store refresh token hashed in DB
+
+----------------------------------------------------
+
+LOGOUT:
+POST /auth/logout
+
+Deletes refresh token from DB + clears cookie
+
+----------------------------------------------------
+
+REFRESH:
+POST /auth/refresh
+
+1. Read refresh token cookie
+2. Compare hashed token in DB
+3. Rotate refresh token
+4. Return new access token
+
+----------------------------------------------------
+
+FORGOT PASSWORD:
+POST /auth/forgot-password
+
+Input:
+{ email }
+
+1. Create random token
+2. Hash and store
+3. Send email with reset link:
+http://localhost:3000/reset-password?token=XXX
+
+----------------------------------------------------
+
+RESET PASSWORD:
+POST /auth/reset-password
+
+Input:
+{ token, newPassword }
+
+1. Validate token
+2. Hash password
+3. Update user
+4. Mark reset token used
+
+----------------------------------------------------
+
+/auth/me:
+Returns authenticated user + organization
+
+----------------------------------------------------
+
+SECURITY REQUIREMENTS:
+
+- Every password hashed with Argon2
+- Refresh tokens hashed in DB
+- Access tokens JWT HS256
+- RBAC middleware implemented
+- OrganizationId attached to request context
+- Proper error handling
+
+----------------------------------------------------
+
+FILES TO IMPLEMENT:
+
+1. Prisma schema
+2. Token utilities (signAccessToken, signRefreshToken)
+3. Password utils (hash, verify)
+4. Auth middleware
+5. RBAC middleware
+6. Auth controller/service/routes
+7. Mailer utility
+8. Env config
+9. Fastify bootstrap
+
+----------------------------------------------------
+
+EXPOSE ROUTES:
+
+POST /auth/signup
+POST /auth/login
+POST /auth/logout
+POST /auth/refresh
+POST /auth/forgot-password
+POST /auth/reset-password
+GET  /auth/me
+
+----------------------------------------------------
+
+CODE QUALITY:
+
+- Typed DTOs
+- Zod validation
+- Services separated from controllers
+- Prisma transactions for signup
+- Refresh token rotation
+- HttpOnly cookies
+- Clean folder structure
+
+----------------------------------------------------
+
+FINAL OUTPUT:
+
+Generate ALL files with full code.
+
+Do NOT summarize.
+
+Do NOT skip files.
+
+Assume blank project.
+
+Create everything.
+
+Production-grade.
+
