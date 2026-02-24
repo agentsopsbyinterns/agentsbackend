@@ -6,7 +6,7 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z.string().min(1).optional(),
 
   JWT_ACCESS_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
@@ -17,6 +17,19 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
 
   APP_URL: z.string().url().default('http://localhost:3000'),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  FACEBOOK_APP_ID: z.string().optional(),
+  FACEBOOK_APP_SECRET: z.string().optional(),
+  SESSION_SECRET: z
+    .string()
+    .min(1)
+    .transform((s) => s.trim())
+    .refine(
+      (s) => (process.env.NODE_ENV === 'production' ? s.length >= 16 : true),
+      { message: 'String must contain at least 16 character(s)' }
+    )
+    .default('dev-session-secret-please-change'),
 
   REDIS_URL: z.string().optional(),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
