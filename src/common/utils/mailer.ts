@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { createTransport, defaultFrom } from '../../config/mail.js';
+=======
+import { createTransport, defaultFrom } from '../../config/mail';
+>>>>>>> origin/main
 
 const transporter = createTransport();
 

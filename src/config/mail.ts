@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { env } from './env.js';
+=======
+import { env } from './env';
+>>>>>>> origin/main
 import nodemailer from 'nodemailer';
 
 export function createTransport() {

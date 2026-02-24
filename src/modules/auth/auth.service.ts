@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { prisma } from '../../prisma/client.js';
 import { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema.js';
 import { hashPassword, verifyPassword } from '../../common/utils/password.js';
@@ -5,6 +6,16 @@ import { generateRandomToken, sha256, signAccessToken } from '../../common/utils
 import { badRequest, conflict, notFound, unauthorized } from '../../common/errors/api-error.js';
 import { sendMail } from '../../common/utils/mailer.js';
 import { env } from '../../config/env.js';
+=======
+import { prisma } from '../../prisma/client';
+import type { Prisma } from '@prisma/client';
+import { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema';
+import { hashPassword, verifyPassword } from '../../common/utils/password';
+import { generateRandomToken, sha256, signAccessToken } from '../../common/utils/tokens';
+import { badRequest, conflict, notFound, unauthorized } from '../../common/errors/api-error';
+import { sendMail } from '../../common/utils/mailer';
+import { env } from '../../config/env';
+>>>>>>> origin/main
 
 export async function signup(input: SignupInput) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
@@ -12,7 +23,11 @@ export async function signup(input: SignupInput) {
     throw conflict('Email already in use');
   }
   const passwordHash = await hashPassword(input.password);
+<<<<<<< HEAD
   const result = await prisma.$transaction(async (tx) => {
+=======
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+>>>>>>> origin/main
     const org = await tx.organization.create({ data: { name: input.organizationName } });
     const user = await tx.user.create({
       data: {
@@ -130,7 +145,11 @@ export async function resetPassword(input: ResetPasswordInput) {
     throw badRequest('Invalid or expired token');
   }
   const newHash = await hashPassword(input.newPassword);
+<<<<<<< HEAD
   await prisma.$transaction(async (tx) => {
+=======
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+>>>>>>> origin/main
     await tx.user.update({ where: { id: record.userId }, data: { passwordHash: newHash } });
     await tx.passwordResetToken.update({ where: { id: record.id }, data: { used: true } });
     await tx.refreshToken.deleteMany({ where: { userId: record.userId } });

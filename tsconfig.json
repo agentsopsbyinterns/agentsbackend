@@ -10,7 +10,11 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+<<<<<<< HEAD
     "types": ["node", "@fastify/cookie"],
+=======
+    "types": ["node"],
+>>>>>>> origin/main
     "lib": ["ES2020"]
   },
   "include": ["src/**/*"]

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { buildApp } from './app.js';
+=======
+import { buildApp } from './app';
+>>>>>>> origin/main
 
 async function main() {
   const app = await buildApp();

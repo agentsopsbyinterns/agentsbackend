@@ -1,5 +1,9 @@
 import { PrismaClient } from '@prisma/client';
+<<<<<<< HEAD
 import '../config/env.js';
+=======
+import '../config/env';
+>>>>>>> origin/main
 
 if (!process.env.DATABASE_URL) {
   const host = process.env.DB_HOST;
