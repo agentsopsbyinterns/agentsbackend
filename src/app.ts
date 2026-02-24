@@ -16,7 +16,10 @@ export async function buildApp() {
 
   await app.register(cors, {
   origin: [
-    "http://localhost:5173",
+    "http://localhost:5173","http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
     "https://frontend.leavecode.co.in"
   ],
   credentials: true
