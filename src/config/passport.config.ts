@@ -71,41 +71,47 @@ async function ensureUserForProvider(provider: 'google' | 'facebook', profile: O
 }
 
 export function setupPassport() {
-  passport.use(
-    new GoogleStrategy(
-      {
-        clientID: env.GOOGLE_CLIENT_ID,
-        clientSecret: env.GOOGLE_CLIENT_SECRET,
-        callbackURL: '/auth/google/callback'
-      },
-      async (_accessToken: string, _refreshToken: string, profile: GoogleProfile, done: (err: any, user?: any) => void) => {
-        try {
-          const user = await ensureUserForProvider('google', profile);
-          done(null, user);
-        } catch (err) {
-          done(err as any, undefined);
+  const googleOk = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+  const facebookOk = !!(env.FACEBOOK_APP_ID && env.FACEBOOK_APP_SECRET);
+  if (googleOk) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: env.GOOGLE_CLIENT_ID as string,
+          clientSecret: env.GOOGLE_CLIENT_SECRET as string,
+          callbackURL: '/auth/google/callback'
+        },
+        async (_accessToken: string, _refreshToken: string, profile: GoogleProfile, done: (err: any, user?: any) => void) => {
+          try {
+            const user = await ensureUserForProvider('google', profile);
+            done(null, user);
+          } catch (err) {
+            done(err as any, undefined);
+          }
         }
-      }
-    )
-  );
+      )
+    );
+  }
 
-  passport.use(
-    new FacebookStrategy(
-      {
-        clientID: env.FACEBOOK_APP_ID,
-        clientSecret: env.FACEBOOK_APP_SECRET,
-        callbackURL: '/auth/facebook/callback',
-        profileFields: ['id', 'displayName', 'emails']
-      },
-      async (_accessToken: string, _refreshToken: string, profile: FacebookProfile, done: (err: any, user?: any) => void) => {
-        try {
-          const user = await ensureUserForProvider('facebook', profile);
-          done(null, user);
-        } catch (err) {
-          done(err as any, undefined);
+  if (facebookOk) {
+    passport.use(
+      new FacebookStrategy(
+        {
+          clientID: env.FACEBOOK_APP_ID as string,
+          clientSecret: env.FACEBOOK_APP_SECRET as string,
+          callbackURL: '/auth/facebook/callback',
+          profileFields: ['id', 'displayName', 'emails']
+        },
+        async (_accessToken: string, _refreshToken: string, profile: FacebookProfile, done: (err: any, user?: any) => void) => {
+          try {
+            const user = await ensureUserForProvider('facebook', profile);
+            done(null, user);
+          } catch (err) {
+            done(err as any, undefined);
+          }
         }
-      }
-    )
-  );
+      )
+    );
+  }
 }
 
