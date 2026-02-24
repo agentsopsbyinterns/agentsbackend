@@ -1,5 +1,4 @@
 import { buildApp } from './app';
-
 async function main() {
   const app = await buildApp();
   try {

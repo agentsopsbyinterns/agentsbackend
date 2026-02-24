@@ -8,12 +8,6 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().min(1),
 
-  DB_HOST: z.string().optional(),
-  DB_NAME: z.string().optional(),
-  DB_USER: z.string().optional(),
-  DB_PASSWORD: z.string().optional(),
-  DB_PORT: z.coerce.number().optional(),
-
   JWT_ACCESS_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
@@ -23,6 +17,11 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
 
   APP_URL: z.string().url().default('http://localhost:3000'),
+
+  REDIS_URL: z.string().optional(),
+  RATE_LIMIT_MAX: z.coerce.number().default(100),
+  RATE_LIMIT_TIME_WINDOW: z.string().default('1 minute'),
+  HMAC_SECRET: z.string().min(16),
 
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),

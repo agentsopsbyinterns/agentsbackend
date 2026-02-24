@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { env, isProd } from '../../config/env';
 import { forgotPassword, login, me, refresh, resetPassword, signup, logout } from './auth.service';
-import { forgotPasswordSchema, loginSchema, resetPasswordSchema, signupSchema } from './auth.schema';
+import { forgotPasswordSchema, loginSchema, resetPasswordSchema, signupSchema, logoutSchema } from './auth.schema';
 import { unauthorized } from '../../common/errors/api-error';
 
 function setRefreshCookie(reply: FastifyReply, value: string) {
@@ -43,8 +43,14 @@ export const AuthController = {
   },
   logout: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
+    const parsed = logoutSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+    const provided = parsed.data.refreshToken;
     const cookie = (request as any).cookies?.[env.REFRESH_COOKIE_NAME];
-    await logout(request.user.id, cookie);
+    const tokenToRevoke = provided || cookie;
+    await logout(request.user.id, tokenToRevoke);
     clearRefreshCookie(reply);
     return reply.send({ success: true });
   },
