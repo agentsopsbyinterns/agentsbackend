@@ -21,7 +21,12 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(8)
 });
 
+export const logoutSchema = z.object({
+  refreshToken: z.string().min(1).optional()
+});
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type LogoutInput = z.infer<typeof logoutSchema>;

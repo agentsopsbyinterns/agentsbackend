@@ -30,7 +30,7 @@ export async function authRoutes(app: FastifyInstance) {
       failureRedirect: '/login?error=oauth_google',
       session: true
     }),
-    (req, res) => {
+    (req: any, res: any) => {
       const format = (req.query as any)?.format;
       if (format === 'json') {
         return res.json({ user: (req as any).user });
@@ -53,7 +53,7 @@ export async function authRoutes(app: FastifyInstance) {
       failureRedirect: '/login?error=oauth_facebook',
       session: true
     }),
-    (req, res) => {
+    (req: any, res: any) => {
       const format = (req.query as any)?.format;
       if (format === 'json') {
         return res.json({ user: (req as any).user });
@@ -80,7 +80,7 @@ export function oauthRouter() {
       failureRedirect: '/login?error=oauth_google',
       session: true
     }),
-    (req, res) => {
+    (req: any, res: any) => {
       const format = (req.query as any)?.format;
       if (format === 'json') {
         return res.json({ user: (req as any).user });
@@ -101,7 +101,7 @@ export function oauthRouter() {
       failureRedirect: '/login?error=oauth_facebook',
       session: true
     }),
-    (req, res) => {
+    (req: any, res: any) => {
       const format = (req.query as any)?.format;
       if (format === 'json') {
         return res.json({ user: (req as any).user });

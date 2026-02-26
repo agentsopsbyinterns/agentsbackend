@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Organization {
@@ -12,7 +13,20 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  deletedAt DateTime?
   users     User[]
+  meetings  Meeting[]
+  projects  Project[]
+  invites   Invite[]
+  conversations Conversation[]
+  integrationConnections IntegrationConnection[]
+  auditLogs AuditLog[]
+}
+
+enum Role {
+  ADMIN
+  PM
+  MEMBER
 }
 
 model User {
@@ -21,14 +35,20 @@ model User {
   email               String               @unique
   passwordHash        String
   name                String
+  avatarUrl           String?
   role                Role                 @default(ADMIN)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
   passwordResetTokens PasswordResetToken[]
   refreshTokens       RefreshToken[]
   organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendees           Attendee[]
+  messages            Message[]
+  conversationsCreated Conversation[] @relation("ConversationCreatedBy")
+  auditLogs           AuditLog[]
 
-  @@index([organizationId], map: "User_organizationId_fkey")
+  @@index([organizationId])
 }
 
 model PasswordResetToken {
@@ -40,7 +60,7 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId], map: "PasswordResetToken_userId_fkey")
+  @@index([userId])
 }
 
 model RefreshToken {
@@ -54,8 +74,172 @@ model RefreshToken {
   @@index([userId])
 }
 
-enum Role {
-  ADMIN
-  PM
-  MEMBER
+model Invite {
+  id             String   @id @default(cuid())
+  organizationId String
+  email          String
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+}
+
+model Meeting {
+  id              String   @id @default(cuid())
+  organizationId  String
+  title           String
+  agenda          String?
+  scheduledTime   DateTime
+  status          String   @default("scheduled")
+  duration        Int?
+  meetingLink     String?
+  botStatus       String? 
+  transcriptStatus String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendees       Attendee[]
+  transcript      TranscriptSegment[]
+  actionItems     ActionItem[]
+
+  @@index([organizationId])
+}
+
+model Attendee {
+  id         String   @id @default(cuid())
+  meetingId  String
+  name       String
+  email      String
+  joined     Boolean  @default(false)
+  isBot      Boolean  @default(false)
+  userId     String?
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([meetingId])
+}
+
+model TranscriptSegment {
+  id         String   @id @default(cuid())
+  meetingId  String
+  speaker    String
+  timestamp  Int
+  text       String
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+}
+
+model ActionItem {
+  id         String   @id @default(cuid())
+  meetingId  String
+  text       String
+  assignee   String?
+  dueDate    DateTime?
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  organizationId String
+  name          String
+  client        String?
+  progress      Int      @default(0)
+  health        String? 
+  status        String? 
+  dueDate       DateTime?
+  asanaLink     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tasks         ProjectTask[]
+
+  @@index([organizationId])
+}
+
+model ProjectTask {
+  id         String   @id @default(cuid())
+  projectId  String
+  title      String
+  status     String   @default("todo")
+  assignee   String?
+  dueDate    DateTime?
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Conversation {
+  id              String   @id @default(cuid())
+  organizationId  String
+  createdById     String
+  createdAt       DateTime @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User      @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  messages        Message[]
+
+  @@index([organizationId])
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  conversationId  String
+  userId          String?
+  role            String
+  content         String
+  meetingId       String?
+  meetingTitle    String?
+  timestamp       Int?
+  createdAt       DateTime @default(now())
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user            User?       @relation(fields: [userId], references: [id])
+
+  @@index([conversationId])
+}
+
+model Integration {
+  id          String   @id @default(cuid())
+  name        String
+  createdAt   DateTime @default(now())
+  connections IntegrationConnection[]
+}
+
+model IntegrationConnection {
+  id            String   @id @default(cuid())
+  organizationId String
+  integrationId String
+  status        String   @default("disconnected")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration   Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@unique([organizationId, integrationId])
+}
+
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  type       String
+  signature  String
+  payload    Json
+  receivedAt DateTime @default(now())
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  organizationId String
+  userId        String?
+  action        String
+  meta          Json?
+  createdAt     DateTime @default(now())
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user          User? @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
 }
