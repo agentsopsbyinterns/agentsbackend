@@ -25,7 +25,9 @@ export async function listMeetings(orgId: string, skip: number, take: number) {
 }
 
 export async function getMeeting(orgId: string, id: string) {
-  return (prisma as any).meeting.findFirst({ where: { id, organizationId: orgId } });
+  return (prisma as any).meeting.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null }
+  });
 }
 
 export async function rescheduleMeeting(orgId: string, id: string, input: RescheduleInput) {

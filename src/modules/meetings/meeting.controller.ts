@@ -1,3 +1,4 @@
+import { prisma } from '../../prisma/client';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
@@ -22,6 +23,7 @@ export const MeetingController = {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
     const m = await getMeeting(request.user.organizationId, id);
+    if (!m) return reply.status(404).send({ error: 'Not found' });
     return reply.send(m);
   },
   reschedule: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -54,7 +56,10 @@ export const MeetingController = {
     return reply.send(data);
   },
   review: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
+    const existing = await getMeeting(request.user.organizationId, id);
+    if (!existing) return reply.status(404).send({ error: 'Not found' });
     const parsed = reviewSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
     const item = await createReview(id, parsed.data);
