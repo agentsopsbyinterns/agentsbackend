@@ -18,13 +18,32 @@ export async function authMiddleware(request: FastifyRequest, _reply: FastifyRep
       email: string;
       organizationId: string;
       role: 'ADMIN' | 'PM' | 'MEMBER';
+      globalRole?: 'SUPER_ADMIN' | 'ADMIN' | 'TEAM_MEMBER';
     };
+
+    const baseRole = decoded.role;
+    const incomingGlobal = decoded.globalRole as any;
+    const mappedGlobal: 'ADMIN' | 'PROJECT_MANAGER' | 'TEAM_MEMBER' | undefined =
+      incomingGlobal === 'SUPER_ADMIN'
+        ? 'ADMIN'
+        : incomingGlobal === 'ADMIN'
+        ? 'ADMIN'
+        : incomingGlobal === 'TEAM_MEMBER'
+        ? 'TEAM_MEMBER'
+        : baseRole === 'PM'
+        ? 'PROJECT_MANAGER'
+        : baseRole === 'ADMIN'
+        ? 'ADMIN'
+        : baseRole === 'MEMBER'
+        ? 'TEAM_MEMBER'
+        : undefined;
 
     request.user = {
       id: decoded.sub,
       email: decoded.email,
       organizationId: decoded.organizationId,
-      role: decoded.role
+      role: decoded.role,
+      globalRole: mappedGlobal
     };
 
     request.organizationId = decoded.organizationId;
