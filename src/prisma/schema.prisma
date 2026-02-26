@@ -8,6 +8,18 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+enum GlobalRole {
+  SUPER_ADMIN
+  ADMIN
+  TEAM_MEMBER
+}
+
+enum ProjectRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -37,6 +49,7 @@ model User {
   name                String
   avatarUrl           String?
   role                Role                 @default(ADMIN)
+  globalRole          GlobalRole           @default(ADMIN)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
@@ -47,6 +60,8 @@ model User {
   messages            Message[]
   conversationsCreated Conversation[] @relation("ConversationCreatedBy")
   auditLogs           AuditLog[]
+  projectMemberships  ProjectMember[]
+  createdProjects     Project[]            @relation("ProjectCreatedBy")
 
   @@index([organizationId])
 }
@@ -148,20 +163,53 @@ model Project {
   organizationId String
   name          String
   client        String?
+  clientName    String?
   progress      Int      @default(0)
   health        String? 
   status        String? 
   dueDate       DateTime?
   asanaLink     String?
+  createdById   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   deletedAt     DateTime?
   organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tasks         ProjectTask[]
+  members       ProjectMember[]
+  createdBy     User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  invites       ProjectInvite[]
 
   @@index([organizationId])
 }
 
+model ProjectMember {
+  id          String      @id @default(cuid())
+  userId      String
+  projectId   String
+  projectRole ProjectRole
+  joinedAt    DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model ProjectInvite {
+  id          String      @id @default(cuid())
+  projectId   String
+  email       String
+  projectRole ProjectRole
+  tokenHash   String      @unique
+  expiresAt   DateTime
+  used        Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@unique([projectId, email])
+}
 model ProjectTask {
   id         String   @id @default(cuid())
   projectId  String

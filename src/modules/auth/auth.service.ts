@@ -31,7 +31,8 @@ export async function signup(input: SignupInput) {
     sub: result.user.id,
     email: result.user.email,
     organizationId: result.user.organizationId,
-    role: result.user.role
+    role: result.user.role,
+    globalRole: (result.user as any).globalRole || 'ADMIN'
   });
   const rawRefresh = generateRandomToken(32);
   const refreshHash = sha256(rawRefresh);
@@ -58,7 +59,8 @@ export async function login(input: LoginInput) {
     sub: user.id,
     email: user.email,
     organizationId: user.organizationId,
-    role: user.role
+    role: user.role,
+    globalRole: (user as any).globalRole || 'ADMIN'
   });
   const rawRefresh = generateRandomToken(32);
   const refreshHash = sha256(rawRefresh);
@@ -100,7 +102,8 @@ export async function refresh(rawRefreshToken: string) {
     sub: user.id,
     email: user.email,
     organizationId: user.organizationId,
-    role: user.role
+    role: user.role,
+    globalRole: (user as any).globalRole || 'ADMIN'
   });
   return { accessToken, newRefresh: newRaw };
 }

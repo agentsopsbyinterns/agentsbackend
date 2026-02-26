@@ -113,6 +113,8 @@ export async function buildApp() {
   await app.register(integrationRoutes);
   await app.register(webhookRoutes);
   await app.register(dashboardRoutes);
+  const { workspaceRoutes } = await import('./modules/workspace/workspace.routes.js');
+  await app.register(workspaceRoutes);
   // If OAuth router is available (Express), mount it
   const oauthRouter = (authModule as any).oauthRouter;
   if (oauthRouter && (app as any).use) {
