@@ -62,6 +62,7 @@ model User {
   auditLogs           AuditLog[]
   projectMemberships  ProjectMember[]
   createdProjects     Project[]            @relation("ProjectCreatedBy")
+  assignedTasks       ProjectTask[]        @relation("TaskAssignee")
 
   @@index([organizationId])
 }
@@ -170,6 +171,7 @@ model Project {
   dueDate       DateTime?
   asanaLink     String?
   createdById   String?
+  budgetTotal   Decimal  @default(0) @db.Decimal(12, 2)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   deletedAt     DateTime?
@@ -178,6 +180,7 @@ model Project {
   members       ProjectMember[]
   createdBy     User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id])
   invites       ProjectInvite[]
+  expenses      ProjectExpense[]
 
   @@index([organizationId])
 }
@@ -214,10 +217,39 @@ model ProjectTask {
   id         String   @id @default(cuid())
   projectId  String
   title      String
-  status     String   @default("todo")
-  assignee   String?
+  description String?
+  status     TaskStatus @default(NOT_STARTED)
+  priority   TaskPriority @default(MEDIUM)
+  assigneeUserId String?
   dueDate    DateTime?
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee   User?     @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+
+  @@index([projectId])
+  @@index([assigneeUserId])
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model ProjectExpense {
+  id          String   @id @default(cuid())
+  projectId   String
+  amount      Decimal  @db.Decimal(12, 2)
+  description String?
+  category    String?
+  incurredAt  DateTime?
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
