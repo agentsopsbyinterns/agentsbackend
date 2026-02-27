@@ -79,7 +79,7 @@ export function setupPassport() {
         {
           clientID: env.GOOGLE_CLIENT_ID as string,
           clientSecret: env.GOOGLE_CLIENT_SECRET as string,
-          callbackURL: '/auth/google/callback'
+          callbackURL: (env.GOOGLE_AUTH_CALLBACK as string) || '/auth/google/callback'
         },
         async (_accessToken: string, _refreshToken: string, profile: GoogleProfile, done: (err: any, user?: any) => void) => {
           try {
