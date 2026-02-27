@@ -16,4 +16,10 @@ export async function projectRoutes(app: FastifyInstance) {
   app.post('/projects/:id/tasks', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.createTask);
   app.patch('/projects/:id/tasks/:taskId', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.updateTask);
   app.delete('/projects/:id/tasks/:taskId', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.deleteTask);
+  app.get('/projects/:id/budget', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.budget);
+  app.patch('/projects/:id/budget', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.updateBudget);
+  app.post('/projects/:id/expenses', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.addExpense);
+  app.get('/projects/:id/expenses', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.listExpenses);
+  app.patch('/projects/:id/expenses/:expenseId', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.updateExpense);
+  app.delete('/projects/:id/expenses/:expenseId', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.deleteExpense);
 }

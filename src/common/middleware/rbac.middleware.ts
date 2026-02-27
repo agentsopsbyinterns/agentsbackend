@@ -30,6 +30,10 @@ export function requireProjectRole(roles: Array<'OWNER' | 'EDITOR' | 'VIEWER'>) 
     if (!request.user) {
       throw unauthorized();
     }
+    const global = (request.user as any).globalRole || request.user.role;
+    if (global === 'ADMIN' || global === 'PROJECT_MANAGER') {
+      return;
+    }
     const projectId = (request.params as any)?.id || (request.params as any)?.projectId;
     if (!projectId) {
       throw forbidden();
