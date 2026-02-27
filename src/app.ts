@@ -10,6 +10,7 @@ import { meetingRoutes } from './modules/meetings/meeting.routes';
 import { projectRoutes } from './modules/projects/project.routes';
 import { chatRoutes } from './modules/chat/chat.routes';
 import { integrationRoutes } from './modules/integrations/integration.routes';
+import { googleCalendarRoutes } from './modules/integrations/google-calendar.routes';
 import { webhookRoutes } from './modules/webhooks/webhook.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
@@ -111,6 +112,7 @@ export async function buildApp() {
   await app.register(projectRoutes);
   await app.register(chatRoutes);
   await app.register(integrationRoutes);
+  await app.register(googleCalendarRoutes);
   await app.register(webhookRoutes);
   await app.register(dashboardRoutes);
   const { workspaceRoutes } = await import('./modules/workspace/workspace.routes.js');

@@ -19,6 +19,8 @@ const envSchema = z.object({
   APP_URL: z.string().url().default('http://localhost:3000'),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_AUTH_CALLBACK: z.string().url().optional(),
+  GOOGLE_CALENDAR_CALLBACK: z.string().url().optional(),
   FACEBOOK_APP_ID: z.string().optional(),
   FACEBOOK_APP_SECRET: z.string().optional(),
   SESSION_SECRET: z

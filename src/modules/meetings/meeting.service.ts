@@ -1,8 +1,11 @@
 import { prisma } from '../../prisma/client';
 import { CreateMeetingInput, RescheduleInput, ReviewInput } from './meeting.schema';
 import { audit } from '../../common/utils/audit';
+import { createEvent, getStoredTokens } from '../integrations/google-calendar.service';
 
 export async function createMeeting(orgId: string, input: CreateMeetingInput) {
+  console.log('[meetings] createMeeting: entry', { orgId, input });
+  console.log('[meetings] createMeeting: before db save');
   const meeting = await (prisma as any).meeting.create({
     data: {
       organizationId: orgId,
@@ -12,8 +15,47 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
       meetingLink: input.meetingLink || null
     }
   });
+  console.log('[meetings] createMeeting: after db save', { meetingId: meeting.id });
   await audit(orgId, 'meeting.create', undefined, { meetingId: meeting.id });
-  return meeting;
+  try {
+    console.log('[meetings] createMeeting: before google event creation');
+    const tokens = await getStoredTokens(orgId);
+    if (!tokens || (!tokens.access_token && !tokens.refresh_token)) {
+      console.error('[meetings] google: tokens missing', { orgId });
+      throw new Error('Google Calendar not connected or tokens missing');
+    }
+    const start = new Date(input.scheduledTime);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const timeZone = (process.env.TIMEZONE as string) || 'UTC';
+    const payload: any = {
+      summary: input.title,
+      description: input.agenda || undefined,
+      start: { dateTime: start.toISOString(), timeZone },
+      end: { dateTime: end.toISOString(), timeZone },
+      conferenceData: {
+        createRequest: {
+          requestId: `mtg-${meeting.id}`
+        }
+      }
+    };
+    const ev = await createEvent(orgId, 'primary', payload);
+    const hangout = (ev as any)?.hangoutLink || (ev as any)?.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video')?.uri;
+    const updated = await (prisma as any).meeting.update({
+      where: { id: meeting.id },
+      data: { meetingLink: hangout || meeting.meetingLink }
+    });
+    await audit(orgId, 'meeting.google_event_created', undefined, {
+      meetingId: meeting.id,
+      googleEventId: (ev as any)?.id,
+      calendarId: 'primary',
+      hangoutLink: hangout || null
+    });
+    console.log('[meetings] createMeeting: after google event creation', { meetingId: meeting.id, googleEventId: (ev as any)?.id });
+    return updated;
+  } catch (err: any) {
+    console.error('[meetings] google: event creation failed', { meetingId: meeting.id, error: err?.message, stack: err?.stack });
+    throw err;
+  }
 }
 
 export async function listMeetings(orgId: string, skip: number, take: number) {

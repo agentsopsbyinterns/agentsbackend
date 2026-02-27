@@ -10,8 +10,19 @@ export const MeetingController = {
     if (!request.user) throw unauthorized();
     const parsed = createMeetingSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
-    const m = await createMeeting(request.user.organizationId, parsed.data);
-    return reply.send(m);
+    try {
+      console.log('[meetings] controller: create entry', { orgId: request.user.organizationId });
+      const m = await createMeeting(request.user.organizationId, parsed.data);
+      console.log('[meetings] controller: create success', { meetingId: (m as any)?.id });
+      return reply.send(m);
+    } catch (err: any) {
+      console.error('[meetings] controller: create failed', { error: err?.message, stack: err?.stack });
+      return reply.status(500).send({
+        error: 'Google Calendar event creation failed',
+        message: err?.message,
+        code: 'GOOGLE_EVENT_CREATE_FAILED'
+      });
+    }
   },
   list: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();

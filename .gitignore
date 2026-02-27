@@ -1,25 +1,19 @@
 # Environment variables
 .env
+.env.*
 
-# Node modules
+# Local data and OAuth tokens
+src/data/google-calendar/
+calendar/tokens.json
+
+# Node modules and build outputs
 node_modules/
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-
-# Build
 dist/
 build/
-node_modules
-.env    
-dist
+*.log
+
+# OS / IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
