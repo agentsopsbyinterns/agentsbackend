@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auth Demo</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+      .card { max-width: 560px; margin: 0 auto; padding: 2rem; border: 1px solid #ddd; border-radius: 8px; }
+      .actions { margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+      .btn { padding: 0.6rem 1rem; border-radius: 6px; border: 1px solid #999; background: #f8f8f8; cursor: pointer; text-decoration: none; color: #111; }
+      .btn-primary { background: #4285F4; color: #fff; border-color: #4285F4; }
+      .btn-fb { background: #1877F2; color: #fff; border-color: #1877F2; }
+      .error { color: #d93025; margin: 0.5rem 0; }
+      img { border-radius: 50%; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Passport Multi-Auth Demo</h1>
+      <% if (typeof error !== 'undefined' && error) { %>
+        <p class="error">Error: <%= error %></p>
+      <% } %>
+      <% if (!user) { %>
+        <p>Choose a sign-in method or use Email + Password.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="/auth/google">Login with Google</a>
+          <% if (typeof facebookEnabled !== 'undefined' && facebookEnabled) { %>
+            <a class="btn btn-fb" href="/auth/facebook">Login with Facebook</a>
+          <% } %>
+          <a class="btn" href="/login">Email Login</a>
+          <a class="btn" href="/register">Register</a>
+        </div>
+      <% } else { %>
+        <p>You are logged in as <strong><%= user.name %></strong> via <strong><%= user.provider %></strong>.</p>
+        <div class="actions">
+          <a class="btn" href="/profile">Go to Profile</a>
+          <a class="btn" href="/logout">Logout</a>
+        </div>
+      <% } %>
+    </div>
+    <script>
+      if (window.trustedTypes && window.trustedTypes.createPolicy) {
+        try {
+          window.trustedTypes.createPolicy('default', {
+            createHTML: (s) => s,
+            createScript: (s) => s,
+            createScriptURL: (s) => s
+          });
+        } catch (e) {}
+      }
+    </script>
+  </body>
+</html>
