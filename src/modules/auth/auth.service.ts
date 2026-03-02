@@ -10,6 +10,36 @@ import { env } from '../../config/env';
 export async function signup(input: SignupInput) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) {
+    const raw = (existing as any).passwordHash as string | null | undefined;
+    const isPlaceholder = !raw || raw.trim().length === 0 || raw.trim().length < 20;
+    if (isPlaceholder) {
+      const newHash = await hashPassword(input.password);
+      const updated = await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name: input.name,
+          passwordHash: newHash
+        }
+      });
+      const accessToken = signAccessToken({
+        sub: updated.id,
+        email: updated.email,
+        organizationId: updated.organizationId,
+        role: updated.role,
+        globalRole: (updated as any).globalRole || 'TEAM_MEMBER'
+      });
+      const rawRefresh = generateRandomToken(32);
+      const refreshHash = sha256(rawRefresh);
+      const refreshExpires = new Date(Date.now() + parseDuration(env.REFRESH_TOKEN_TTL));
+      await prisma.refreshToken.create({
+        data: { userId: updated.id, tokenHash: refreshHash, expiresAt: refreshExpires }
+      });
+      return {
+        user: sanitizeUser(updated),
+        accessToken,
+        refreshCookieValue: rawRefresh
+      };
+    }
     throw conflict('Email already in use');
   }
   const passwordHash = await hashPassword(input.password);
