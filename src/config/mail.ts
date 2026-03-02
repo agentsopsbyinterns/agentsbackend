@@ -1,17 +1,26 @@
-import { env } from './env';
-import nodemailer from 'nodemailer';
+import { Resend } from "resend";
+import { env } from "./env";
 
-export function createTransport() {
-  const hasCreds = !!(env.SMTP_HOST && env.SMTP_PORT);
-  if (!hasCreds) {
-    return nodemailer.createTransport({ jsonTransport: true });
-  }
-  return nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    secure: env.SMTP_PORT === 465,
-    auth: env.SMTP_USER && env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined
+const resend = new Resend(env.RESEND_API_KEY);
+
+export async function sendMail(options: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  from?: string;
+}) {
+  const { data, error } = await resend.emails.send({
+    from: "onboarding@resend.dev",
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text,
   });
-}
 
-export const defaultFrom = env.SMTP_FROM || 'no-reply@example.com';
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
