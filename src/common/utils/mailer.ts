@@ -1,14 +1,21 @@
-import { createTransport, defaultFrom } from '../../config/mail';
+import { Resend } from 'resend';
+import { env } from '../../config/env';
 
-const transporter = createTransport();
+const resend = new Resend(env.RESEND_API_KEY);
 
-export async function sendMail(options: { to: string; subject: string; html: string; text?: string; from?: string }) {
-  const info = await transporter.sendMail({
-    from: options.from || defaultFrom,
+export async function sendMail(options: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}) {
+  const response = await resend.emails.send({
+    from: 'onboarding@resend.dev', // testing sender
     to: options.to,
     subject: options.subject,
     html: options.html,
-    text: options.text
+    text: options.text,
   });
-  return info;
+
+  return response;
 }
