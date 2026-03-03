@@ -51,7 +51,7 @@ export async function createInvite(orgId: string, input: InviteInput & { inviter
   });
   await audit(orgId, 'invite.create', undefined, { email: input.email });
   const org = await prisma.organization.findUnique({ where: { id: orgId } });
-  const base = 'http://localhost:5173';
+  const base = env.APP_URL;
   const token = createInviteToken(orgId, input.email, 1000 * 60 * 60 * 24 * 7);
   const link = `${base}/accept-invite?token=${token}`;
   const orgName = org?.name || 'Your Organization';
