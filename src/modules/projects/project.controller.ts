@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
-import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, acceptProjectInvite, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense } from './project.service';
+import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, acceptProjectInvite, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings } from './project.service';
 
 export const ProjectController = {
   list: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -61,11 +61,26 @@ export const ProjectController = {
     const m = await projectMetrics(id);
     return reply.send(m);
   },
+  meetings: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const items = await listProjectMeetings(request.user.organizationId, id);
+    return reply.send({ items });
+  },
   createTask: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
     const body = request.body as any;
-    const task = await createTask(id, body.title, body.assigneeUserId ?? body.assignee, body.dueDate, body.description, body.status, body.priority);
+    const task = await createTask(
+      id,
+      body.title,
+      body.assigneeUserId ?? body.assignee,
+      body.dueDate,
+      body.description,
+      body.status,
+      body.priority,
+      body.meetingId
+    );
     return reply.code(201).send(task);
   },
   updateTask: async (request: FastifyRequest, reply: FastifyReply) => {

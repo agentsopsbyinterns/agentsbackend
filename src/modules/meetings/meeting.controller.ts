@@ -17,6 +17,14 @@ export const MeetingController = {
       return reply.send(m);
     } catch (err: any) {
       console.error('[meetings] controller: create failed', { error: err?.message, stack: err?.stack });
+      const msg = String(err?.message || '');
+      if (msg.includes('Google Calendar not connected') || msg.includes('tokens missing')) {
+        return reply.status(400).send({
+          error: 'Google Calendar not connected',
+          message: 'Please connect Google Calendar for this workspace',
+          code: 'GOOGLE_NOT_CONNECTED'
+        });
+      }
       return reply.status(500).send({
         error: 'Google Calendar event creation failed',
         message: err?.message,
@@ -36,6 +44,15 @@ export const MeetingController = {
     const m = await getMeeting(request.user.organizationId, id);
     if (!m) return reply.status(404).send({ error: 'Not found' });
     return reply.send(m);
+  },
+  tasks: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const items = await (prisma as any).projectTask.findMany({
+      where: { meetingId: id },
+      orderBy: { dueDate: 'asc' }
+    });
+    return reply.send({ items });
   },
   reschedule: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();

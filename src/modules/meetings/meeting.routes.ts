@@ -7,6 +7,7 @@ export async function meetingRoutes(app: FastifyInstance) {
   app.post('/meetings', { preHandler: [authMiddleware] }, MeetingController.create);
   app.get('/meetings', { preHandler: [authMiddleware] }, MeetingController.list);
   app.get('/meetings/:id', { preHandler: [authMiddleware] }, MeetingController.get);
+  app.get('/meetings/:id/tasks', { preHandler: [authMiddleware] }, MeetingController.tasks);
   app.post('/meetings/:id/reschedule', { preHandler: [authMiddleware, rbacMiddleware(['ADMIN','PM'])] }, MeetingController.reschedule);
   app.post('/meetings/:id/invite-bot', { preHandler: [authMiddleware] }, MeetingController.inviteBot);
   app.get('/meetings/:id/timeline', { preHandler: [authMiddleware] }, MeetingController.timeline);

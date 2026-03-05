@@ -11,6 +11,7 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
       organizationId: orgId,
       title: input.title,
       agenda: input.agenda || null,
+      projectId: input.projectId || null,
       scheduledTime: input.scheduledTime,
       meetingLink: input.meetingLink || null
     }
@@ -34,7 +35,8 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
       end: { dateTime: end.toISOString(), timeZone },
       conferenceData: {
         createRequest: {
-          requestId: `mtg-${meeting.id}`
+          requestId: `mtg-${meeting.id}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' }
         }
       }
     };

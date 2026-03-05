@@ -14,13 +14,23 @@ export async function getProject(orgId: string, id: string) {
 }
 
 export async function listTasks(projectId: string) {
-  return (prisma as any).projectTask.findMany({ where: { projectId } });
+  return (prisma as any).projectTask.findMany({
+    where: { projectId },
+    include: { meeting: true }
+  });
 }
 
 export async function projectMetrics(projectId: string) {
   const total = await (prisma as any).projectTask.count({ where: { projectId } });
   const done = await (prisma as any).projectTask.count({ where: { projectId, status: 'COMPLETED' } });
   return { total, done };
+}
+
+export async function listProjectMeetings(orgId: string, projectId: string) {
+  return (prisma as any).meeting.findMany({
+    where: { organizationId: orgId, projectId, deletedAt: null },
+    orderBy: { scheduledTime: 'desc' }
+  });
 }
 
 export async function createProject(orgId: string, creatorUserId: string, input: any) {
@@ -179,13 +189,14 @@ export async function acceptProjectInvite(rawToken: string, password: string) {
   return { user, accessToken };
 }
 
-export async function createTask(projectId: string, title: string, assigneeUserId?: string, dueDate?: string, description?: string, status?: string, priority?: string) {
+export async function createTask(projectId: string, title: string, assigneeUserId?: string, dueDate?: string, description?: string, status?: string, priority?: string, meetingId?: string) {
   const data: any = { projectId, title };
   if (description !== undefined) data.description = description;
   if (status !== undefined) data.status = status;
   if (priority !== undefined) data.priority = priority;
   if (assigneeUserId !== undefined) data.assigneeUserId = assigneeUserId;
   if (dueDate) data.dueDate = new Date(dueDate);
+  if (meetingId !== undefined) data.meetingId = meetingId || null;
   return (prisma as any).projectTask.create({ data });
 }
 
