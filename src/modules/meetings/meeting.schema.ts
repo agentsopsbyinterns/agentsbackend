@@ -4,7 +4,8 @@ export const createMeetingSchema = z.object({
   title: z.string().min(1),
   agenda: z.string().optional(),
   scheduledTime: z.string().transform((v) => new Date(v)),
-  meetingLink: z.string().url().optional()
+  meetingLink: z.string().url().optional(),
+  projectId: z.string().optional()
 });
 
 export const rescheduleSchema = z.object({

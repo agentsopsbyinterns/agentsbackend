@@ -107,6 +107,8 @@ model Meeting {
   title           String
   agenda          String?
   scheduledTime   DateTime
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id])
   status          String   @default("scheduled")
   duration        Int?
   meetingLink     String?
@@ -119,8 +121,10 @@ model Meeting {
   attendees       Attendee[]
   transcript      TranscriptSegment[]
   actionItems     ActionItem[]
+  tasks           ProjectTask[]
 
   @@index([organizationId])
+  @@index([projectId])
 }
 
 model Attendee {
@@ -176,6 +180,7 @@ model Project {
   updatedAt     DateTime @updatedAt
   deletedAt     DateTime?
   organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  meetings      Meeting[]
   tasks         ProjectTask[]
   members       ProjectMember[]
   createdBy     User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id])
@@ -216,6 +221,7 @@ model ProjectInvite {
 model ProjectTask {
   id         String   @id @default(cuid())
   projectId  String
+  meetingId  String?
   title      String
   description String?
   status     TaskStatus @default(NOT_STARTED)
@@ -223,9 +229,11 @@ model ProjectTask {
   assigneeUserId String?
   dueDate    DateTime?
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  meeting    Meeting? @relation(fields: [meetingId], references: [id])
   assignee   User?     @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
 
   @@index([projectId])
+  @@index([meetingId])
   @@index([assigneeUserId])
 }
 
