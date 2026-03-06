@@ -2,6 +2,9 @@ import { prisma } from '../../prisma/client';
 import { CreateMeetingInput, RescheduleInput, ReviewInput } from './meeting.schema';
 import { audit } from '../../common/utils/audit';
 import { createEvent, getStoredTokens } from '../integrations/google-calendar.service';
+import { runExtraction } from './extraction.service';
+import fs from 'fs/promises';
+import path from 'path';
 
 export async function createMeeting(orgId: string, input: CreateMeetingInput) {
   console.log('[meetings] createMeeting: entry', { orgId, input });
@@ -22,8 +25,8 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
     console.log('[meetings] createMeeting: before google event creation');
     const tokens = await getStoredTokens(orgId);
     if (!tokens || (!tokens.access_token && !tokens.refresh_token)) {
-      console.error('[meetings] google: tokens missing', { orgId });
-      throw new Error('Google Calendar not connected or tokens missing');
+      console.warn('[meetings] google: tokens missing - proceeding without Google Calendar event', { orgId });
+      return meeting;
     }
     const start = new Date(input.scheduledTime);
     const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -41,7 +44,7 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
       }
     };
     const ev = await createEvent(orgId, 'primary', payload);
-    const hangout = (ev as any)?.hangoutLink || (ev as any)?.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video')?.uri;
+    const hangout = (ev as any)?.hangoutLink || (ev as any)?.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video')?.uri || (ev as any)?.htmlLink || null;
     const updated = await (prisma as any).meeting.update({
       where: { id: meeting.id },
       data: { meetingLink: hangout || meeting.meetingLink }
@@ -55,8 +58,8 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
     console.log('[meetings] createMeeting: after google event creation', { meetingId: meeting.id, googleEventId: (ev as any)?.id });
     return updated;
   } catch (err: any) {
-    console.error('[meetings] google: event creation failed', { meetingId: meeting.id, error: err?.message, stack: err?.stack });
-    throw err;
+    console.error('[meetings] google: event creation failed - proceeding without Google event', { meetingId: meeting.id, error: err?.message });
+    return meeting;
   }
 }
 
@@ -117,4 +120,32 @@ export async function updateActionItem(id: string, text: string, assignee?: stri
   if (assignee !== undefined) data.assignee = assignee;
   if (dueDate) data.dueDate = new Date(dueDate);
   return (prisma as any).actionItem.update({ where: { id }, data });
+}
+
+export async function saveManualTranscript(orgId: string, meetingId: string, transcript: string) {
+  const meeting = await (prisma as any).meeting.findFirst({ where: { id: meetingId, organizationId: orgId, deletedAt: null } });
+  if (!meeting) return null;
+  await (prisma as any).meeting.update({ where: { id: meetingId }, data: { rawTranscript: transcript, transcriptStatus: 'completed' } });
+  const extraction = await runExtraction(meetingId, transcript);
+  await audit(orgId, 'meeting.manual_transcript_uploaded', undefined, { meetingId });
+  return extraction;
+}
+
+async function ensureDir(p: string) {
+  try {
+    await fs.mkdir(p, { recursive: true });
+  } catch {}
+}
+
+export async function saveRecordingAndExtract(orgId: string, meetingId: string, filename: string, data: Buffer) {
+  const meeting = await (prisma as any).meeting.findFirst({ where: { id: meetingId, organizationId: orgId, deletedAt: null } });
+  if (!meeting) return null;
+  const baseDir = path.resolve(process.cwd(), 'src', 'data', 'recordings', meetingId);
+  await ensureDir(baseDir);
+  const filePath = path.join(baseDir, filename);
+  await fs.writeFile(filePath, data);
+  await audit(orgId, 'meeting.recording_uploaded', undefined, { meetingId, filePath });
+  // Speech-to-text integration required to proceed
+  await (prisma as any).meeting.update({ where: { id: meetingId }, data: { transcriptStatus: 'uploaded' } });
+  return { filePath, error: 'speech_to_text_not_configured' };
 }

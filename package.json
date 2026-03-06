@@ -25,6 +25,7 @@
     "@fastify/cookie": "^9.3.1",
     "@fastify/cors": "^8.4.0",
     "@fastify/express": "^3.0.0",
+    "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^8.0.0",
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^1.10.2",
