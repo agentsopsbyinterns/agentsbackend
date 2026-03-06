@@ -106,6 +106,8 @@ model Meeting {
   organizationId  String
   title           String
   agenda          String?
+  rawTranscript   String?
+  extractionJson  Json?
   scheduledTime   DateTime
   projectId       String?
   project         Project? @relation(fields: [projectId], references: [id])

@@ -28,18 +28,26 @@ export const AuthController = {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten() });
     }
-    const result = await signup(parsed.data);
-    setRefreshCookie(reply, result.refreshCookieValue);
-    return reply.send({ user: result.user, accessToken: result.accessToken });
+    try {
+      const result = await signup(parsed.data);
+      setRefreshCookie(reply, result.refreshCookieValue);
+      return reply.send({ user: result.user, accessToken: result.accessToken });
+    } catch (err: any) {
+      return reply.status(503).send({ error: 'Database unavailable', code: 'DB_UNAVAILABLE' });
+    }
   },
   login: async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten() });
     }
-    const result = await login(parsed.data);
-    setRefreshCookie(reply, result.refreshCookieValue);
-    return reply.send({ user: result.user, accessToken: result.accessToken });
+    try {
+      const result = await login(parsed.data);
+      setRefreshCookie(reply, result.refreshCookieValue);
+      return reply.send({ user: result.user, accessToken: result.accessToken });
+    } catch (err: any) {
+      return reply.status(503).send({ error: 'Database unavailable', code: 'DB_UNAVAILABLE' });
+    }
   },
   logout: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
@@ -57,9 +65,13 @@ export const AuthController = {
   refresh: async (request: FastifyRequest, reply: FastifyReply) => {
     const cookie = (request as any).cookies?.[env.REFRESH_COOKIE_NAME];
     if (!cookie) throw unauthorized('Missing refresh token');
-    const result = await refresh(cookie);
-    setRefreshCookie(reply, result.newRefresh);
-    return reply.send({ accessToken: result.accessToken });
+    try {
+      const result = await refresh(cookie);
+      setRefreshCookie(reply, result.newRefresh);
+      return reply.send({ accessToken: result.accessToken });
+    } catch (err: any) {
+      return reply.status(503).send({ error: 'Database unavailable', code: 'DB_UNAVAILABLE' });
+    }
   },
   forgotPassword: async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = forgotPasswordSchema.safeParse(request.body);
