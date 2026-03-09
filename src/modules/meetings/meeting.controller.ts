@@ -3,7 +3,8 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
 import { createMeetingSchema, rescheduleSchema, reviewSchema } from './meeting.schema';
-import { createMeeting, deleteMeeting, getMeeting, inviteBot, listMeetings, meetingInsights, meetingTimeline, meetingTranscript, rescheduleMeeting, updateActionItem, createReview, saveManualTranscript, saveRecordingAndExtract } from './meeting.service';
+import { createMeeting, deleteMeeting, getMeeting, inviteBot, listMeetings, meetingInsights, meetingTimeline, meetingTranscript, rescheduleMeeting, updateActionItem, createReview, saveRecordingAndExtract } from './meeting.service';
+import { cleanTranscript, extractMeetingData } from '../../services/gemini.service';
 import { z } from 'zod';
 
 export const MeetingController = {
@@ -118,9 +119,66 @@ export const MeetingController = {
     const bodySchema = z.object({ transcript: z.string().min(1) });
     const parsed = bodySchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
-    const result = await saveManualTranscript(request.user.organizationId, id, parsed.data.transcript);
-    if (!result) return reply.status(404).send({ error: 'Not found' });
-    return reply.send(result);
+    const meeting = await (prisma as any).meeting.findFirst({ where: { id, organizationId: request.user.organizationId, deletedAt: null } });
+    if (!meeting) return reply.status(404).send({ error: 'Not found' });
+    const raw = parsed.data.transcript;
+    const cleaned = cleanTranscript(raw);
+    const extraction = await extractMeetingData(cleaned);
+
+console.log("===== EXTRACTION DEBUG =====");
+console.log("Full Extraction:", extraction);
+console.log("Client:", extraction.clientName);
+console.log("Primary Contact:", extraction.primaryContact);
+console.log("Email:", extraction.contactEmail);
+console.log("Goals:", extraction.goals);
+console.log("Deliverables:", extraction.deliverables);
+console.log("Timeline:", extraction.timeline);
+console.log("Budget:", extraction.budget);
+console.log("Tech Stack:", extraction.techStack);
+console.log("Tasks:", extraction.tasks);
+console.log("Team:", extraction.team);
+console.log("Risks:", extraction.risks);
+console.log("============================");
+    const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    const technical_stack = {
+      tech_stack: Array.isArray(extraction.techStack) ? extraction.techStack : [],
+      requirements: Array.isArray(extraction.requirements) ? extraction.requirements : []
+    };
+    const milestones = Array.isArray(extraction.milestones) ? extraction.milestones : [];
+    const missingInfo = Array.isArray(extraction.missingInformation) ? extraction.missingInformation.slice() : [];
+    const budgetValue = extraction.budget ?? 'Not mentioned';
+    await (prisma as any).meeting.update({ where: { id }, data: { rawTranscript: raw, extractionJson: {
+      client_information: {
+        client_name: extraction.clientName || 'Not mentioned',
+        primary_contact: extraction.primaryContact || 'Not mentioned',
+        contact_email: extraction.contactEmail || (emailMatch ? emailMatch[0] : null)
+      },
+      project_summary: {
+        project_name: 'Not mentioned',
+        project_goal: Array.isArray(extraction.goals) && extraction.goals.length ? extraction.goals.join('\n') : 'Not mentioned',
+        project_description: extraction.summary || 'Not mentioned'
+      },
+      timeline: {
+        overall_timeline: extraction.timeline || 'Not mentioned',
+        milestones
+      },
+      budget: budgetValue || 'Not mentioned',
+      technical_stack,
+      deliverables: Array.isArray(extraction.deliverables) ? extraction.deliverables : [],
+      tasks: (Array.isArray(extraction.tasks) ? extraction.tasks : []).map((t: any) =>
+        typeof t === 'string'
+          ? ({ title: String(t).trim() || 'Not mentioned', assignee: 'Not mentioned', deadline: 'Not mentioned' })
+          : ({ title: String(t?.title || '').trim() || 'Not mentioned', assignee: String(t?.assignee || '').trim() || 'Not mentioned', deadline: String(t?.deadline || '').trim() || 'Not mentioned' })
+      ),
+      team_roles: (Array.isArray(extraction.team) ? extraction.team : []).map((m: any) =>
+        typeof m === 'string'
+          ? ({ name: String(m).trim() || 'Not mentioned', role: 'Not mentioned' })
+          : ({ name: String(m?.name || '').trim() || 'Not mentioned', role: String(m?.role || '').trim() || 'Not mentioned' })
+      ),
+      risks: Array.isArray(extraction.risks) ? extraction.risks : [],
+      missing_information: missingInfo
+    }, transcriptStatus: 'completed' } });
+    return reply.send(extraction);
   },
   uploadRecording: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();

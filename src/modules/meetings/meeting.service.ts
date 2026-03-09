@@ -2,7 +2,7 @@ import { prisma } from '../../prisma/client';
 import { CreateMeetingInput, RescheduleInput, ReviewInput } from './meeting.schema';
 import { audit } from '../../common/utils/audit';
 import { createEvent, getStoredTokens } from '../integrations/google-calendar.service';
-import { runExtraction } from './extraction.service';
+// Legacy extraction removed in favor of Gemini-only pipeline
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -126,9 +126,8 @@ export async function saveManualTranscript(orgId: string, meetingId: string, tra
   const meeting = await (prisma as any).meeting.findFirst({ where: { id: meetingId, organizationId: orgId, deletedAt: null } });
   if (!meeting) return null;
   await (prisma as any).meeting.update({ where: { id: meetingId }, data: { rawTranscript: transcript, transcriptStatus: 'completed' } });
-  const extraction = await runExtraction(meetingId, transcript);
   await audit(orgId, 'meeting.manual_transcript_uploaded', undefined, { meetingId });
-  return extraction;
+  return { success: true };
 }
 
 async function ensureDir(p: string) {

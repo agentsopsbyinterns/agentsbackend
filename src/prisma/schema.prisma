@@ -106,13 +106,12 @@ model Meeting {
   organizationId  String
   title           String
   agenda          String?
-  rawTranscript   String?
+  rawTranscript   String?  @db.LongText
   extractionJson  Json?
   scheduledTime   DateTime
   projectId       String?
   project         Project? @relation(fields: [projectId], references: [id])
   status          String   @default("scheduled")
-  duration        Int?
   meetingLink     String?
   botStatus       String? 
   transcriptStatus String?
