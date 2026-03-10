@@ -3,6 +3,7 @@ import { env } from '../../config/env';
 import fs from 'fs/promises';
 import path from 'path';
 import { prisma } from '../../prisma/client';
+import jwt from 'jsonwebtoken';
 
 type StoredTokens = {
   access_token?: string;
@@ -15,7 +16,9 @@ type StoredTokens = {
 function getOAuthClient() {
   const clientId = env.GOOGLE_CLIENT_ID as string;
   const clientSecret = env.GOOGLE_CLIENT_SECRET as string;
-  const redirectUri = (env.GOOGLE_CALENDAR_CALLBACK as string) || `${env.APP_URL}/integrations/google-calendar/callback`;
+  const redirectUri =
+    (env.GOOGLE_CALENDAR_CALLBACK as string) ||
+    `${(env as any).BACKEND_URL || 'http://localhost:4000'}/integrations/google-calendar/callback`;
   const oauth2Client = new (google as any).auth.OAuth2(clientId, clientSecret, redirectUri);
   return oauth2Client;
 }
@@ -39,6 +42,8 @@ export async function getAuthUrl(orgId?: string) {
   const scopes = [
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
     'openid',
     'email',
     'profile'
@@ -46,6 +51,7 @@ export async function getAuthUrl(orgId?: string) {
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
+    include_granted_scopes: true as any,
     scope: scopes,
     state: orgId ? String(orgId) : undefined
   });
@@ -89,9 +95,22 @@ export async function exchangeCodeForTokens(code: string) {
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens as any);
   try {
-    const oauth2 = (google as any).oauth2({ version: 'v2', auth: oauth2Client });
-    const info = await oauth2.userinfo.get();
-    const email = (info.data as any)?.email;
+    let email: string | undefined;
+    const idt = (tokens as any)?.id_token as string | undefined;
+    if (idt) {
+      const decoded: any = jwt.decode(idt);
+      if (decoded && typeof decoded === 'object') {
+        email = decoded.email || decoded?.['email'];
+      }
+    }
+    if (!email) {
+      // Fallback to userinfo endpoint
+      try {
+        const oauth2 = (google as any).oauth2({ version: 'v2', auth: oauth2Client });
+        const info = await oauth2.userinfo.get();
+        email = (info.data as any)?.email;
+      } catch {}
+    }
     const merged: StoredTokens = { ...(tokens as any), email };
     return merged;
   } catch {

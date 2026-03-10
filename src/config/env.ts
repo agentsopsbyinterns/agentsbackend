@@ -17,12 +17,16 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
 
   APP_URL: z.string().url().default('http://localhost:3000'),
+  BACKEND_URL: z.string().url().default('http://localhost:4000'),
+
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_AUTH_CALLBACK: z.string().url().optional(),
   GOOGLE_CALENDAR_CALLBACK: z.string().url().optional(),
+
   FACEBOOK_APP_ID: z.string().optional(),
   FACEBOOK_APP_SECRET: z.string().optional(),
+
   SESSION_SECRET: z
     .string()
     .min(1)
@@ -34,16 +38,22 @@ const envSchema = z.object({
     .default('dev-session-secret-please-change'),
 
   REDIS_URL: z.string().optional(),
+
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_TIME_WINDOW: z.string().default('1 minute'),
+
   HMAC_SECRET: z.string().min(16),
 
+  // Email
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().email().or(z.string()).optional(),
+
   RESEND_API_KEY: z.string().optional(),
+
+  // AI (optional)
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
