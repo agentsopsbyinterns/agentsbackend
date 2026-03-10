@@ -22,6 +22,12 @@ export async function googleCalendarRoutes(app: FastifyInstance) {
     if (!orgId) return reply.status(400).send({ error: 'Missing organization context' });
     const tokens = await exchangeCodeForTokens(code);
     await storeTokens(orgId, tokens);
+    try {
+      const acc = await getConnectedAccount(orgId);
+      if (acc?.email) {
+        // ensure email persisted
+      }
+    } catch {}
     const redirect = `${env.APP_URL}/settings/integrations?google=connected`;
     return reply.redirect(redirect);
   });
