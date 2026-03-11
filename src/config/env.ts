@@ -48,6 +48,16 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  GEMINI_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => String(v || '').toLowerCase() === 'true'),
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_MODEL: z.string().optional(),
+  DEEPSEEK_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => String(v || '').toLowerCase() === 'true'),
 });
 
 const parsed = envSchema.safeParse(process.env);
