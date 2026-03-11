@@ -4,7 +4,7 @@ import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
 import { createMeetingSchema, rescheduleSchema, reviewSchema } from './meeting.schema';
 import { createMeeting, deleteMeeting, getMeeting, inviteBot, listMeetings, meetingInsights, meetingTimeline, meetingTranscript, rescheduleMeeting, updateActionItem, createReview, saveRecordingAndExtract } from './meeting.service';
-import { cleanTranscript, extractMeetingData } from '../../services/gemini.service';
+import { cleanTranscript, extractMeetingData } from '../../services/ai.service';
 import { z } from 'zod';
 
 export const MeetingController = {
@@ -125,59 +125,66 @@ export const MeetingController = {
     const cleaned = cleanTranscript(raw);
     const extraction = await extractMeetingData(cleaned);
 
-console.log("===== EXTRACTION DEBUG =====");
-console.log("Full Extraction:", extraction);
-console.log("Client:", extraction.clientName);
-console.log("Primary Contact:", extraction.primaryContact);
-console.log("Email:", extraction.contactEmail);
-console.log("Goals:", extraction.goals);
-console.log("Deliverables:", extraction.deliverables);
-console.log("Timeline:", extraction.timeline);
-console.log("Budget:", extraction.budget);
-console.log("Tech Stack:", extraction.techStack);
-console.log("Tasks:", extraction.tasks);
-console.log("Team:", extraction.team);
-console.log("Risks:", extraction.risks);
-console.log("============================");
+    console.log("===== EXTRACTION DEBUG =====");
+    console.log("Full Extraction:", JSON.stringify(extraction, null, 2));
+    console.log("============================");
+
     const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-    const technical_stack = {
-      tech_stack: Array.isArray(extraction.techStack) ? extraction.techStack : [],
-      requirements: Array.isArray(extraction.requirements) ? extraction.requirements : []
-    };
-    const milestones = Array.isArray(extraction.milestones) ? extraction.milestones : [];
-    const missingInfo = Array.isArray(extraction.missingInformation) ? extraction.missingInformation.slice() : [];
-    const budgetValue = extraction.budget ?? 'Not mentioned';
-    await (prisma as any).meeting.update({ where: { id }, data: { rawTranscript: raw, extractionJson: {
-      client_information: {
-        client_name: extraction.clientName || 'Not mentioned',
-        primary_contact: extraction.primaryContact || 'Not mentioned',
-        contact_email: extraction.contactEmail || (emailMatch ? emailMatch[0] : null)
-      },
-      project_summary: {
-        project_name: 'Not mentioned',
-        project_goal: Array.isArray(extraction.goals) && extraction.goals.length ? extraction.goals.join('\n') : 'Not mentioned',
-        project_description: extraction.summary || 'Not mentioned'
-      },
-      timeline: {
-        overall_timeline: extraction.timeline || 'Not mentioned',
-        milestones
-      },
-      budget: budgetValue || 'Not mentioned',
-      technical_stack,
-      deliverables: Array.isArray(extraction.deliverables) ? extraction.deliverables : [],
-      tasks: (Array.isArray(extraction.tasks) ? extraction.tasks : []).map((t: any) =>
-        typeof t === 'string'
-          ? ({ title: String(t).trim() || 'Not mentioned', assignee: 'Not mentioned', deadline: 'Not mentioned' })
-          : ({ title: String(t?.title || '').trim() || 'Not mentioned', assignee: String(t?.assignee || '').trim() || 'Not mentioned', deadline: String(t?.deadline || '').trim() || 'Not mentioned' })
-      ),
-      team_roles: (Array.isArray(extraction.team) ? extraction.team : []).map((m: any) =>
-        typeof m === 'string'
-          ? ({ name: String(m).trim() || 'Not mentioned', role: 'Not mentioned' })
-          : ({ name: String(m?.name || '').trim() || 'Not mentioned', role: String(m?.role || '').trim() || 'Not mentioned' })
-      ),
-      risks: Array.isArray(extraction.risks) ? extraction.risks : [],
-      missing_information: missingInfo
-    }, transcriptStatus: 'completed' } });
+    
+    // Ensure nested objects exist to avoid crashes
+    const client_info = extraction.client_information || {};
+    const timeline = extraction.timeline || {};
+    const tech_stack = extraction.technical_stack || {};
+
+    await (prisma as any).meeting.update({ 
+      where: { id }, 
+      data: { 
+        rawTranscript: raw, 
+        extractionJson: {
+          client_information: {
+            client_name: client_info.client_name || 'Not mentioned',
+            primary_contact: client_info.primary_contact || 'Not mentioned',
+            contact_email: client_info.contact_email || (emailMatch ? emailMatch[0] : 'Not mentioned')
+          },
+          project_summary: {
+            project_name: 'Not mentioned',
+            project_goal: Array.isArray(extraction.project_goals) && extraction.project_goals.length ? extraction.project_goals.join('\n') : 'Not mentioned',
+            project_description: extraction.project_summary || 'Not mentioned'
+          },
+          timeline: {
+            overall_timeline: timeline.overall_timeline || 'Not mentioned',
+            milestones: Array.isArray(extraction.milestones) ? extraction.milestones : []
+          },
+          budget: extraction.budget || 'Not mentioned',
+          technical_stack: {
+            backend: Array.isArray(tech_stack.backend) ? tech_stack.backend : [],
+            frontend: Array.isArray(tech_stack.frontend) ? tech_stack.frontend : [],
+            mobile: Array.isArray(tech_stack.mobile) ? tech_stack.mobile : [],
+            database: Array.isArray(tech_stack.database) ? tech_stack.database : [],
+            caching: Array.isArray(tech_stack.caching) ? tech_stack.caching : [],
+            analytics: Array.isArray(tech_stack.analytics) ? tech_stack.analytics : [],
+            infrastructure: Array.isArray(tech_stack.infrastructure) ? tech_stack.infrastructure : [],
+            containers: Array.isArray(tech_stack.containers) ? tech_stack.containers : [],
+            cloud_providers: Array.isArray(tech_stack.cloud_providers) ? tech_stack.cloud_providers : [],
+            languages: Array.isArray(tech_stack.languages) ? tech_stack.languages : []
+          },
+          deliverables: Array.isArray(extraction.deliverables) ? extraction.deliverables : [],
+          tasks: (Array.isArray(extraction.milestones) ? extraction.milestones : []).map((m: any) => ({
+            title: String(m?.task || '').trim() || 'Not mentioned',
+            assignee: String(m?.owner || '').trim() || 'Not mentioned',
+            deadline: String(m?.deadline || '').trim() || 'Not mentioned'
+          })),
+          team_roles: (Array.isArray(extraction.suggested_team) ? extraction.suggested_team : []).map((m: any) =>
+            typeof m === 'string'
+              ? ({ name: String(m).trim() || 'Not mentioned', role: 'Not mentioned' })
+              : ({ name: String(m?.name || m?.member || '').trim() || 'Not mentioned', role: String(m?.role || '').trim() || 'Not mentioned' })
+          ),
+          risks: Array.isArray(extraction.risks) ? extraction.risks : [],
+          missing_information: Array.isArray(extraction.missing_information) ? extraction.missing_information : []
+        }, 
+        transcriptStatus: 'completed' 
+      } 
+    });
     return reply.send(extraction);
   },
   uploadRecording: async (request: FastifyRequest, reply: FastifyReply) => {

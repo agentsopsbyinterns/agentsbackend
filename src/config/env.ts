@@ -58,6 +58,8 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+
+  AI_PROVIDER: z.enum(['openai', 'gemini']).default('openai'),
 });
 
 const parsed = envSchema.safeParse(process.env);
