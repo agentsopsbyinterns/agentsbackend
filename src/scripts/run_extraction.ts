@@ -1,4 +1,4 @@
-import { extractMeetingData, cleanTranscript } from "../services/gemini.service";
+import { extractMeetingData, cleanTranscript } from "../services/ai.service";
 
 async function main() {
   const transcript = `Amit (Project Manager):
