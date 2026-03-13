@@ -204,4 +204,114 @@ You are an AI system that extracts structured project information from a meeting
   return result;
 }
 
+export async function mergeProjectData(previousState: any, newMeetingData: any): Promise<any> {
+  const prompt = `
+You are an AI Project Intelligence Engine. 
+ 
+ You will receive structured JSON from a meeting processing system. 
+ 
+ The data contains: 
+ 
+ 1. PREVIOUS_PROJECT_STATE 
+    This represents the current known state of the project. 
+ 
+ 2. NEW_MEETING_DATA 
+    This represents the information extracted from the latest meeting. 
+ 
+ Your job is to intelligently merge the new meeting information into the previous project state. 
+ 
+ Rules: 
+ 
+ 1. SUMMARY 
+    Merge the previous summary with the new meeting summary to produce an updated project summary. 
+ 
+ 2. TASKS 
+    Compare the previous tasks with the new tasks. 
+ 
+ If a task is clearly a modified version of an existing task → update it. 
+ 
+ If a task is completely new → add it. 
+ 
+ If an old task was not mentioned → keep it unchanged. 
+ 
+ Never duplicate tasks. 
+ 
+ 3. DELIVERABLES 
+    Merge deliverables and remove duplicates. 
+ 
+ 4. TIMELINE 
+    If the new meeting contains timeline updates → replace the previous timeline. 
+ 
+ Otherwise keep the previous timeline. 
+ 
+ 5. BUDGET 
+    If the new meeting contains a budget update → update the budget. 
+    Otherwise keep the previous budget. 
+ 
+ 6. CLIENT INFORMATION 
+    If new client details are mentioned → update them. 
+ 
+ Return ONLY valid JSON in this structure: 
+ 
+ { 
+ "final_summary": "", 
+ "updated_tasks": [], 
+ "deliverables": [], 
+ "timeline": "", 
+ "budget": "", 
+ "client_information": {} 
+ }
+
+ PREVIOUS_PROJECT_STATE:
+ ${JSON.stringify(previousState, null, 2)}
+
+ NEW_MEETING_DATA:
+ ${JSON.stringify(newMeetingData, null, 2)}
+`;
+
+  const response = await callAIProvider(prompt);
+  return parseJSON(response);
+}
+
+export async function detectTaskChanges(previousTasks: any[], updatedTasks: any[]): Promise<any> {
+  const prompt = `
+You are an AI Change Detection System for project management. 
+ 
+ You will receive: 
+ 
+ 1. PREVIOUS_TASKS (JSON) 
+ 2. UPDATED_TASKS (JSON) 
+ 
+ Your job is to compare them and detect changes. 
+ 
+ Identify: 
+ 
+ 1. NEW_TASKS 
+    Tasks that appear in UPDATED_TASKS but not in PREVIOUS_TASKS. 
+ 
+ 2. MODIFIED_TASKS 
+    Tasks that existed before but were updated or expanded. 
+ 
+ 3. UNCHANGED_TASKS 
+    Tasks that stayed the same. 
+ 
+ Return JSON: 
+ 
+ { 
+ "new_tasks": [], 
+ "modified_tasks": [], 
+ "unchanged_tasks": [] 
+ }
+
+ PREVIOUS_TASKS:
+ ${JSON.stringify(previousTasks, null, 2)}
+
+ UPDATED_TASKS:
+ ${JSON.stringify(updatedTasks, null, 2)}
+`;
+
+  const response = await callAIProvider(prompt);
+  return parseJSON(response);
+}
+
 export const callAI = callAIProvider;
