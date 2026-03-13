@@ -2,13 +2,17 @@ import { prisma } from '../../prisma/client';
 import { CreateMeetingInput, RescheduleInput, ReviewInput } from './meeting.schema';
 import { audit } from '../../common/utils/audit';
 import { createEvent, getStoredTokens } from '../integrations/google-calendar.service';
+import { sendMail } from '../../common/utils/mailer';
 // Legacy extraction removed in favor of Gemini-only pipeline
 import fs from 'fs/promises';
 import path from 'path';
 
-export async function createMeeting(orgId: string, input: CreateMeetingInput) {
+export async function createMeeting(orgId: string, input: CreateMeetingInput, creatorEmail?: string) {
   console.log('[meetings] createMeeting: entry', { orgId, input });
   console.log('[meetings] createMeeting: before db save');
+  
+  const attendeeEmails = input.attendees || [];
+  
   const meeting = await (prisma as any).meeting.create({
     data: {
       organizationId: orgId,
@@ -16,11 +20,43 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
       agenda: input.agenda || null,
       projectId: input.projectId || null,
       scheduledTime: input.scheduledTime,
-      meetingLink: input.meetingLink || null
+      meetingLink: input.meetingLink || null,
+      attendees: {
+        create: attendeeEmails.map((email: string) => ({
+          email,
+          name: email.split('@')[0], // Fallback name
+        }))
+      }
+    },
+    include: {
+      attendees: true
     }
   });
+  
   console.log('[meetings] createMeeting: after db save', { meetingId: meeting.id });
   await audit(orgId, 'meeting.create', undefined, { meetingId: meeting.id });
+
+  // Send email notifications to all attendees
+  for (const email of attendeeEmails) {
+    try {
+      await sendMail({
+        to: email,
+        subject: `Meeting Invitation: ${input.title}`,
+        html: `
+          <h1>Meeting Invitation</h1>
+          <p>You have been invited to a meeting: <strong>${input.title}</strong></p>
+          <p><strong>Time:</strong> ${new Date(input.scheduledTime).toLocaleString()}</p>
+          ${input.agenda ? `<p><strong>Agenda:</strong> ${input.agenda}</p>` : ''}
+          ${input.meetingLink ? `<p><strong>Link:</strong> <a href="${input.meetingLink}">${input.meetingLink}</a></p>` : ''}
+          <p>See you there!</p>
+        `
+      });
+      console.log(`[meetings] Notification sent to ${email}`);
+    } catch (mailErr: any) {
+      console.error(`[meetings] Failed to send notification to ${email}`, mailErr.message);
+    }
+  }
+
   try {
     console.log('[meetings] createMeeting: before google event creation');
     const tokens = await getStoredTokens(orgId);
@@ -36,6 +72,7 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
       description: input.agenda || undefined,
       start: { dateTime: start.toISOString(), timeZone },
       end: { dateTime: end.toISOString(), timeZone },
+      attendees: attendeeEmails.map((email: string) => ({ email })),
       conferenceData: {
         createRequest: {
           requestId: `mtg-${meeting.id}`,
@@ -63,17 +100,29 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
   }
 }
 
-export async function listMeetings(orgId: string, skip: number, take: number) {
+export async function listMeetings(orgId: string, skip: number, take: number, projectId?: string | null) {
+  const where: Record<string, any> = { organizationId: orgId, deletedAt: null };
+  if (projectId) where.projectId = projectId;
   const [items, total] = await Promise.all([
-    (prisma as any).meeting.findMany({ where: { organizationId: orgId, deletedAt: null }, orderBy: { scheduledTime: 'desc' }, skip, take }),
-    (prisma as any).meeting.count({ where: { organizationId: orgId, deletedAt: null } })
+    (prisma as any).meeting.findMany({
+      where,
+      orderBy: { scheduledTime: 'desc' },
+      skip,
+      take,
+      include: { project: { select: { id: true, name: true, clientName: true, client: true } } }
+    }),
+    (prisma as any).meeting.count({ where })
   ]);
   return { items, total };
 }
 
 export async function getMeeting(orgId: string, id: string) {
   return (prisma as any).meeting.findFirst({
-    where: { id, organizationId: orgId, deletedAt: null }
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: {
+      attendees: true,
+      project: { select: { id: true, name: true } },
+    },
   });
 }
 

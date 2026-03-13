@@ -34,6 +34,39 @@ export async function listProjectMeetings(orgId: string, projectId: string) {
   });
 }
 
+export async function listProjectMembers(projectId: string) {
+  const members = await (prisma as any).projectMember.findMany({
+    where: { projectId },
+    include: { user: true }
+  });
+  return {
+    items: members.map((m: any) => ({
+      id: m.userId,
+      email: m.user.email,
+      name: m.user.name,
+      role: m.projectRole,
+      status: 'ACTIVE'
+    })),
+    total: members.length
+  };
+}
+
+export async function getProjectIntegrations(orgId: string) {
+  const connections = await (prisma as any).integrationConnection.findMany({
+    where: { organizationId: orgId },
+    include: { integration: true }
+  });
+  const providers = ['msteams', 'slack', 'asana'];
+  return providers.map(p => {
+    const conn = connections.find((c: any) => c.integration.name.toLowerCase() === p);
+    return {
+      provider: p,
+      connected: !!conn && conn.status === 'connected',
+      connectedAccount: conn?.status === 'connected' ? 'Connected' : undefined
+    };
+  });
+}
+
 export async function mergeMeetingToProject(orgId: string, projectId: string, meetingId: string) {
   const project = await (prisma as any).project.findUnique({
     where: { id: projectId, organizationId: orgId },
@@ -270,6 +303,56 @@ export async function updateTask(id: string, title?: string, status?: string, as
 
 export async function deleteTask(id: string) {
   return (prisma as any).projectTask.delete({ where: { id } });
+}
+
+export async function archiveProject(orgId: string, id: string) {
+  return (prisma as any).project.update({
+    where: { id, organizationId: orgId },
+    data: { status: 'ARCHIVED' }
+  });
+}
+
+export async function syncAsana(orgId: string, id: string) {
+  const project = await (prisma as any).project.findUnique({ where: { id, organizationId: orgId } });
+  if (!project) throw new Error('Project not found');
+  // Mocking Asana sync: updating updatedAt
+  return (prisma as any).project.update({
+    where: { id },
+    data: { updatedAt: new Date() }
+  });
+}
+
+export async function generateAITasks(orgId: string, id: string) {
+  const project = await (prisma as any).project.findUnique({ where: { id, organizationId: orgId } });
+  if (!project) throw new Error('Project not found');
+  
+  // Find latest meeting for this project to extract from
+  const meeting = await (prisma as any).meeting.findFirst({
+    where: { projectId: id, organizationId: orgId, deletedAt: null },
+    orderBy: { scheduledTime: 'desc' }
+  });
+
+  if (!meeting || !meeting.rawTranscript) {
+    // Return empty list if no transcript to extract from
+    return [];
+  }
+
+  const { extractMeetingData } = require('../../services/ai.service');
+  const extracted = await extractMeetingData(meeting.rawTranscript);
+  
+  const tasks = (extracted.milestones || extracted.tasks || []).map((t: any) => ({
+    projectId: id,
+    title: t.task || t.title || 'Extracted Task',
+    description: `Extracted from meeting: ${meeting.title}`,
+    status: 'NOT_STARTED',
+    priority: 'MEDIUM'
+  }));
+
+  if (tasks.length > 0) {
+    await (prisma as any).projectTask.createMany({ data: tasks });
+  }
+
+  return tasks;
 }
 
 function sha256(input: string) {
