@@ -14,7 +14,7 @@ export const MeetingController = {
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
     try {
       console.log('[meetings] controller: create entry', { orgId: request.user.organizationId });
-      const m = await createMeeting(request.user.organizationId, parsed.data);
+      const m = await createMeeting(request.user.organizationId, parsed.data, request.user.email);
       console.log('[meetings] controller: create success', { meetingId: (m as any)?.id });
       return reply.send(m);
     } catch (err: any) {
@@ -23,6 +23,7 @@ export const MeetingController = {
       try {
         const body = parsed.success ? parsed.data : (request.body as any);
         const scheduled = body?.scheduledTime ? new Date(body.scheduledTime) : new Date();
+        const attendees = Array.isArray(body?.attendees) ? body.attendees : [];
         const minimal = await (prisma as any).meeting.create({
           data: {
             organizationId: request.user.organizationId,
@@ -30,7 +31,13 @@ export const MeetingController = {
             agenda: body?.agenda || null,
             projectId: body?.projectId || null,
             scheduledTime: scheduled,
-            meetingLink: body?.meetingLink || null
+            meetingLink: body?.meetingLink || null,
+            attendees: {
+              create: attendees.map((email: string) => ({
+                email,
+                name: email.split('@')[0],
+              }))
+            }
           }
         });
         console.warn('[meetings] controller: returned minimal meeting due to upstream error');
