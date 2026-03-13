@@ -1,9 +1,23 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
-import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, acceptProjectInvite, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks } from './project.service';
+import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, acceptProjectInvite, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks } from './project.service';
 
 export const ProjectController = {
+  mergeMeeting: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const meetingId = (request.params as any).meetingId;
+    const result = await mergeMeetingToProject(request.user.organizationId, id, meetingId);
+    return reply.send(result);
+  },
+  detectTaskChanges: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const body = request.body as any;
+    const result = await detectProjectTaskChanges(id, body.updated_tasks || []);
+    return reply.send(result);
+  },
   list: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const { skip, take, page, pageSize } = getPagination(request.query as any);

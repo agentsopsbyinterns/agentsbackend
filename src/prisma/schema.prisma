@@ -231,11 +231,13 @@ model ProjectTask {
   dueDate    DateTime?
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   meeting    Meeting? @relation(fields: [meetingId], references: [id])
-  assignee   User?     @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  assignee   User?    @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
 
   @@index([projectId])
   @@index([meetingId])
   @@index([assigneeUserId])
+
+  @@unique([projectId, title])
 }
 
 enum TaskStatus {
