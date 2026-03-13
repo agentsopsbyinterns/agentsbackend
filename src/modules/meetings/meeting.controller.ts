@@ -54,8 +54,10 @@ export const MeetingController = {
   },
   list: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
-    const { skip, take, page, pageSize } = getPagination(request.query as any);
-    const { items, total } = await listMeetings(request.user.organizationId, skip, take);
+    const q = request.query as any;
+    const { skip, take, page, pageSize } = getPagination(q);
+    const projectId = typeof q?.projectId === 'string' && q.projectId.trim() ? q.projectId : undefined;
+    const { items, total } = await listMeetings(request.user.organizationId, skip, take, projectId);
     return reply.send({ page, pageSize, total, items });
   },
   get: async (request: FastifyRequest, reply: FastifyReply) => {

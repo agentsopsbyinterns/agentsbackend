@@ -63,17 +63,29 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput) {
   }
 }
 
-export async function listMeetings(orgId: string, skip: number, take: number) {
+export async function listMeetings(orgId: string, skip: number, take: number, projectId?: string | null) {
+  const where: Record<string, any> = { organizationId: orgId, deletedAt: null };
+  if (projectId) where.projectId = projectId;
   const [items, total] = await Promise.all([
-    (prisma as any).meeting.findMany({ where: { organizationId: orgId, deletedAt: null }, orderBy: { scheduledTime: 'desc' }, skip, take }),
-    (prisma as any).meeting.count({ where: { organizationId: orgId, deletedAt: null } })
+    (prisma as any).meeting.findMany({
+      where,
+      orderBy: { scheduledTime: 'desc' },
+      skip,
+      take,
+      include: { project: { select: { id: true, name: true, clientName: true, client: true } } }
+    }),
+    (prisma as any).meeting.count({ where })
   ]);
   return { items, total };
 }
 
 export async function getMeeting(orgId: string, id: string) {
   return (prisma as any).meeting.findFirst({
-    where: { id, organizationId: orgId, deletedAt: null }
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: {
+      attendees: true,
+      project: { select: { id: true, name: true } },
+    },
   });
 }
 
