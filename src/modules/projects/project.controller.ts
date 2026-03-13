@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
-import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, acceptProjectInvite, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings } from './project.service';
+import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, acceptProjectInvite, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks } from './project.service';
 
 export const ProjectController = {
   list: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -9,6 +9,35 @@ export const ProjectController = {
     const { skip, take, page, pageSize } = getPagination(request.query as any);
     const { items, total } = await listProjects(request.user.organizationId, skip, take);
     return reply.send({ page, pageSize, total, items });
+  },
+  archive: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const p = await archiveProject(request.user.organizationId, id);
+    return reply.send(p);
+  },
+  syncAsana: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const p = await syncAsana(request.user.organizationId, id);
+    return reply.send(p);
+  },
+  generateTasks: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const tasks = await generateAITasks(request.user.organizationId, id);
+    return reply.send(tasks);
+  },
+  members: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const result = await listProjectMembers(id);
+    return reply.send(result);
+  },
+  integrations: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const result = await getProjectIntegrations(request.user.organizationId);
+    return reply.send(result);
   },
   invite: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();

@@ -9,6 +9,11 @@ export async function projectRoutes(app: FastifyInstance) {
   app.get('/projects/:id/meetings', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.meetings);
   app.get('/projects/:id/tasks', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.tasks);
   app.get('/projects/:id/metrics', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.metrics);
+  app.get('/projects/:id/members', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.members);
+  app.get('/projects/:id/integrations', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.integrations);
+  app.post('/projects/:id/archive', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.archive);
+  app.post('/projects/:id/sync-asana', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.syncAsana);
+  app.post('/projects/:id/generate-tasks', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.generateTasks);
   app.post('/projects', { preHandler: [authMiddleware] }, ProjectController.create);
   app.put('/projects/:id', { preHandler: [authMiddleware] }, ProjectController.update);
   app.delete('/projects/:id', { preHandler: [authMiddleware] }, ProjectController.remove);
