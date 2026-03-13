@@ -13,6 +13,7 @@ import { integrationRoutes } from './modules/integrations/integration.routes';
 import { googleCalendarRoutes } from './modules/integrations/google-calendar.routes';
 import { webhookRoutes } from './modules/webhooks/webhook.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
+import { taskRoutes } from './modules/tasks/tasks.routes';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { idempotencyMiddleware } from './common/middleware/idempotency.middleware';
 
@@ -115,6 +116,7 @@ export async function buildApp() {
   await app.register(googleCalendarRoutes);
   await app.register(webhookRoutes);
   await app.register(dashboardRoutes);
+  await app.register(taskRoutes);
   const { workspaceRoutes } = await import('./modules/workspace/workspace.routes.js');
   await app.register(workspaceRoutes);
   // If OAuth router is available (Express), mount it

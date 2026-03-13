@@ -9,6 +9,8 @@ export async function projectRoutes(app: FastifyInstance) {
   app.get('/projects/:id/meetings', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.meetings);
   app.get('/projects/:id/tasks', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.tasks);
   app.get('/projects/:id/metrics', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR','VIEWER'])] }, ProjectController.metrics);
+  app.post('/projects/:id/merge-meeting/:meetingId', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.mergeMeeting);
+  app.post('/projects/:id/detect-task-changes', { preHandler: [authMiddleware, requireProjectRole(['OWNER','EDITOR'])] }, ProjectController.detectTaskChanges);
   app.post('/projects', { preHandler: [authMiddleware] }, ProjectController.create);
   app.put('/projects/:id', { preHandler: [authMiddleware] }, ProjectController.update);
   app.delete('/projects/:id', { preHandler: [authMiddleware] }, ProjectController.remove);

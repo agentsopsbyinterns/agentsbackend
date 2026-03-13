@@ -1,5 +1,6 @@
 import { prisma } from '../../prisma/client';
 import { signAccessToken } from '../../common/utils/tokens';
+import { mergeProjectData, detectTaskChanges } from '../../services/ai.service';
 
 export async function listProjects(orgId: string, skip: number, take: number) {
   const [items, total] = await Promise.all([
@@ -31,6 +32,62 @@ export async function listProjectMeetings(orgId: string, projectId: string) {
     where: { organizationId: orgId, projectId, deletedAt: null },
     orderBy: { scheduledTime: 'desc' }
   });
+}
+
+export async function mergeMeetingToProject(orgId: string, projectId: string, meetingId: string) {
+  const project = await (prisma as any).project.findUnique({
+    where: { id: projectId, organizationId: orgId },
+    include: { tasks: true, meetings: { where: { deletedAt: null }, orderBy: { scheduledTime: 'desc' } } }
+  });
+
+  if (!project) throw new Error('Project not found');
+
+  const meeting = await (prisma as any).meeting.findUnique({
+    where: { id: meetingId, organizationId: orgId }
+  });
+
+  if (!meeting) throw new Error('Meeting not found');
+
+  // Identify the "previous state". We can use the extraction of the most recent 
+  // PREVIOUS meeting (not the current one).
+  const previousMeeting = project.meetings.find((m: any) => m.id !== meetingId && m.extractionJson);
+  
+  // If no previous meeting extraction, construct from project data
+  const previousState = previousMeeting?.extractionJson || {
+    final_summary: project.name,
+    updated_tasks: project.tasks.map((t: any) => ({ 
+      task: t.title, 
+      owner: t.assigneeUserId || 'Not mentioned', 
+      deadline: t.dueDate ? t.dueDate.toISOString() : 'Not mentioned' 
+    })),
+    deliverables: [],
+    timeline: project.dueDate ? project.dueDate.toISOString() : '',
+    budget: project.budgetTotal ? project.budgetTotal.toString() : '',
+    client_information: {
+      client_name: project.clientName || project.client || '',
+    }
+  };
+
+  const newMeetingData = meeting.extractionJson || {};
+
+  const merged = await mergeProjectData(previousState, newMeetingData);
+
+  // Note: We are just returning the JSON as per the user's "Return ONLY valid JSON" requirement.
+  // The user prompt in ai.service.ts already handles the logic.
+  return merged;
+}
+
+export async function detectProjectTaskChanges(projectId: string, updatedTasks: any[]) {
+  const tasks = await (prisma as any).projectTask.findMany({ where: { projectId } });
+  const previousTasks = tasks.map((t: any) => ({
+    id: t.id,
+    task: t.title,
+    owner: t.assigneeUserId,
+    deadline: t.dueDate ? t.dueDate.toISOString() : 'Not mentioned',
+    status: t.status
+  }));
+
+  return await detectTaskChanges(previousTasks, updatedTasks);
 }
 
 export async function createProject(orgId: string, creatorUserId: string, input: any) {

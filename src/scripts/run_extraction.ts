@@ -1,3 +1,4 @@
+import process from 'node:process';
 import { extractMeetingData, cleanTranscript } from "../services/ai.service";
 
 async function main() {
