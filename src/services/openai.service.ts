@@ -29,7 +29,7 @@ export async function callOpenAI(prompt: string): Promise<string> {
         { role: "system", content: "You are a precise extractor. Respond with valid JSON only." },
         { role: "user", content: prompt }
       ],
-      temperature: 0.2,
+      temperature: 0.1,
     });
     const text = resp?.choices?.[0]?.message?.content || "";
     return text || "{}";
