@@ -18,17 +18,9 @@ import { taskRoutes } from './modules/tasks/tasks.routes';
 import usersRoutes from './modules/users/users.routes';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { idempotencyMiddleware } from './common/middleware/idempotency.middleware';
-import { prisma } from './prisma/client';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
-  try {
-    await prisma.$connect();
-    await prisma.$queryRaw`SELECT 1`;
-    app.log.info('Prisma connected successfully');
-  } catch (err: any) {
-    app.log.error({ err }, 'Prisma connection failed');
-  }
 
   await app.register(cookie, { secret: undefined, hook: 'onRequest' });
   await app.register(rateLimit, { max: env.RATE_LIMIT_MAX, timeWindow: env.RATE_LIMIT_TIME_WINDOW });

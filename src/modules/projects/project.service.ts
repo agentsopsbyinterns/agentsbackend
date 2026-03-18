@@ -10,36 +10,6 @@ export async function listProjects(orgId: string, skip: number, take: number) {
   return { items, total };
 }
 
-export async function listProjectsForUser(
-  orgId: string,
-  userId: string,
-  role: 'ADMIN' | 'PROJECT_MANAGER' | 'TEAM_MEMBER' | undefined,
-  skip: number,
-  take: number,
-  assignedToMe?: boolean
-) {
-  const isAdmin = role === 'ADMIN' || role === 'PROJECT_MANAGER';
-  const filterMine = assignedToMe === true;
-  if (isAdmin && !filterMine) {
-    return listProjects(orgId, skip, take);
-  }
-  const where: any = {
-    organizationId: orgId,
-    deletedAt: null,
-    members: { some: { userId } }
-  };
-  const [items, total] = await Promise.all([
-    (prisma as any).project.findMany({
-      where,
-      orderBy: { updatedAt: 'desc' },
-      skip,
-      take
-    }),
-    (prisma as any).project.count({ where })
-  ]);
-  return { items, total };
-}
-
 export async function getProject(orgId: string, id: string) {
   return (prisma as any).project.findFirst({ where: { id, organizationId: orgId } });
 }
