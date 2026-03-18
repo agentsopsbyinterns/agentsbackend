@@ -37,9 +37,14 @@ async function callAIProvider(prompt: string): Promise<string> {
   }
 }
 
-export async function extractMeetingData(transcript: string): Promise<any> {
+export async function extractMeetingData(transcript: string, previousSummaries?: string[]): Promise<any> {
+  const historyContext = previousSummaries && previousSummaries.length > 0 
+    ? `\n\nPROJECT MEETING HISTORY (PREVIOUS SUMMARIES):\n${previousSummaries.join("\n---\n")}\n\nUse the above history to provide context and track progress in the current meeting summary.`
+    : "";
+
   const prompt = `
 You are an AI system that extracts structured project information from a meeting transcript. 
+ ${historyContext}
  
  Carefully analyze the transcript and extract ALL relevant project details. 
  
@@ -105,7 +110,7 @@ You are an AI system that extracts structured project information from a meeting
  - contact_email 
  
  Project Summary 
- - summary 
+ - summary (Include progress context if previous summaries were provided)
  
  Project Goals 
  - list of goals 
@@ -147,6 +152,12 @@ You are an AI system that extracts structured project information from a meeting
  
  Missing Information 
  - list details the team still needs to confirm 
+
+ Project Insights (NEW SECTION)
+ - key_decisions: list of major decisions made in this meeting
+ - completed_tasks: list of tasks mentioned as completed since the last meeting
+ - pending_blockers: list of issues preventing progress
+ - next_actions: immediate next steps for the team
  
  FINAL OUTPUT FORMAT 
  
@@ -186,7 +197,13 @@ You are an AI system that extracts structured project information from a meeting
    }, 
    "suggested_team": [], 
    "risks": [], 
-   "missing_information": [] 
+   "missing_information": [],
+   "project_insights": {
+     "key_decisions": [],
+     "completed_tasks": [],
+     "pending_blockers": [],
+     "next_actions": []
+   }
  } 
  
  Before returning the JSON: 

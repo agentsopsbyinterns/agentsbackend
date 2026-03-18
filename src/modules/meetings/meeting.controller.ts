@@ -130,9 +130,30 @@ export const MeetingController = {
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
     const meeting = await (prisma as any).meeting.findFirst({ where: { id, organizationId: request.user.organizationId, deletedAt: null } });
     if (!meeting) return reply.status(404).send({ error: 'Not found' });
+    
+    // Fetch previous meeting summaries for the same project
+    let previousSummaries: string[] = [];
+    if (meeting.projectId) {
+      const prevMeetings = await (prisma as any).meeting.findMany({
+        where: { 
+          projectId: meeting.projectId, 
+          organizationId: request.user.organizationId,
+          id: { not: id },
+          extractionJson: { not: null },
+          deletedAt: null
+        },
+        orderBy: { scheduledTime: 'asc' },
+        select: { extractionJson: true }
+      });
+      
+      previousSummaries = prevMeetings
+        .map((m: any) => m.extractionJson?.project_summary?.project_description || m.extractionJson?.project_summary || "")
+        .filter((s: string) => s.length > 0);
+    }
+
     const raw = parsed.data.transcript;
     const cleaned = cleanTranscript(raw);
-    const extraction = await extractMeetingData(cleaned);
+    const extraction = await extractMeetingData(cleaned, previousSummaries);
 
     console.log("===== EXTRACTION DEBUG =====");
     console.log("Full Extraction:", JSON.stringify(extraction, null, 2));
@@ -144,6 +165,7 @@ export const MeetingController = {
     const client_info = extraction.client_information || {};
     const timeline = extraction.timeline || {};
     const tech_stack = extraction.technical_stack || {};
+    const insights = extraction.project_insights || {};
 
     await (prisma as any).meeting.update({ 
       where: { id }, 
@@ -189,7 +211,13 @@ export const MeetingController = {
               : ({ name: String(m?.name || m?.member || '').trim() || 'Not mentioned', role: String(m?.role || '').trim() || 'Not mentioned' })
           ),
           risks: Array.isArray(extraction.risks) ? extraction.risks : [],
-          missing_information: Array.isArray(extraction.missing_information) ? extraction.missing_information : []
+          missing_information: Array.isArray(extraction.missing_information) ? extraction.missing_information : [],
+          project_insights: {
+            key_decisions: Array.isArray(insights.key_decisions) ? insights.key_decisions : [],
+            completed_tasks: Array.isArray(insights.completed_tasks) ? insights.completed_tasks : [],
+            pending_blockers: Array.isArray(insights.pending_blockers) ? insights.pending_blockers : [],
+            next_actions: Array.isArray(insights.next_actions) ? insights.next_actions : []
+          }
         }, 
         transcriptStatus: 'completed' 
       } 
