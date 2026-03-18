@@ -2,15 +2,19 @@ import { env } from "../config/env";
 import { callGemini } from "./gemini.service";
 import { callOpenAI } from "./openai.service";
 
-// Minimal helpers kept locally to avoid cross-file utils and keep AI-only focus
+function cleanJSON(text: string): string {
+  // Also remove markdown code blocks
+  return text.replace(/```json/g, "").replace(/```/g, "").trim();
+}
+
 export function parseJSON(text: string) {
   try {
-    return JSON.parse(text);
+    return JSON.parse(cleanJSON(text));
   } catch {}
   const m = text.match(/\{[\s\S]*\}/);
   if (!m) return {};
   try {
-    return JSON.parse(m[0]);
+    return JSON.parse(cleanJSON(m[0]));
   } catch {
     return {};
   }
@@ -223,108 +227,141 @@ You are an AI system that extracts structured project information from a meeting
 
 export async function mergeProjectData(previousState: any, newMeetingData: any): Promise<any> {
   const prompt = `
-You are an AI Project Intelligence Engine. 
- 
- You will receive structured JSON from a meeting processing system. 
- 
- The data contains: 
- 
- 1. PREVIOUS_PROJECT_STATE 
-    This represents the current known state of the project. 
- 
- 2. NEW_MEETING_DATA 
-    This represents the information extracted from the latest meeting. 
- 
- Your job is to intelligently merge the new meeting information into the previous project state. 
- 
- Rules: 
- 
- 1. SUMMARY 
-    Merge the previous summary with the new meeting summary to produce an updated project summary. 
- 
- 2. TASKS 
-    Compare the previous tasks with the new tasks. 
- 
- If a task is clearly a modified version of an existing task → update it. 
- 
- If a task is completely new → add it. 
- 
- If an old task was not mentioned → keep it unchanged. 
- 
- Never duplicate tasks. 
- 
- 3. DELIVERABLES 
-    Merge deliverables and remove duplicates. 
- 
- 4. TIMELINE 
-    If the new meeting contains timeline updates → replace the previous timeline. 
- 
- Otherwise keep the previous timeline. 
- 
- 5. BUDGET 
-    If the new meeting contains a budget update → update the budget. 
-    Otherwise keep the previous budget. 
- 
- 6. CLIENT INFORMATION 
-    If new client details are mentioned → update them. 
- 
- Return ONLY valid JSON in this structure: 
- 
- { 
- "final_summary": "", 
- "updated_tasks": [], 
- "deliverables": [], 
- "timeline": "", 
- "budget": "", 
- "client_information": {} 
- }
+    You are an AI Project Intelligence Engine.
+    You will receive structured JSON from a meeting processing system.
 
- PREVIOUS_PROJECT_STATE:
- ${JSON.stringify(previousState, null, 2)}
+    The data contains:
+    1. PREVIOUS_PROJECT_STATE: The current known state of the project.
+    2. NEW_MEETING_DATA: Information extracted from the latest meeting.
 
- NEW_MEETING_DATA:
- ${JSON.stringify(newMeetingData, null, 2)}
-`;
+    Your job is to intelligently merge the new meeting information into the previous project state.
+
+    Rules:
+    1. SUMMARY: Merge the previous summary with the new meeting summary to produce an updated project summary.
+    2. TASKS: Compare the previous tasks with the new tasks.
+      - If a task is clearly a modified version of an existing task → update it.
+      - If a task is completely new → add it.
+      - If an old task was not mentioned → keep it unchanged.
+      - Never duplicate tasks.
+    3. DELIVERABLES: Merge deliverables and remove duplicates.
+    4. TIMELINE: If the new meeting contains timeline updates → replace the previous timeline. Otherwise keep the previous timeline.
+    5. BUDGET: If the new meeting contains a budget update → update the budget. Otherwise keep the previous budget.
+    6. CLIENT INFORMATION: If new client details are mentioned → update them.
+
+    Return ONLY valid JSON in this structure:
+    {
+      "final_summary": "",
+      "updated_tasks": [],
+      "deliverables": [],
+      "timeline": "",
+      "budget": "",
+      "client_information": {}
+    }
+
+    PREVIOUS_PROJECT_STATE:
+    ${JSON.stringify(previousState, null, 2)}
+
+    NEW_MEETING_DATA:
+    ${JSON.stringify(newMeetingData, null, 2)}
+  `;
 
   const response = await callAIProvider(prompt);
-  return parseJSON(response);
+  return JSON.parse(cleanJSON(response));
 }
 
-export async function detectTaskChanges(previousTasks: any[], updatedTasks: any[]): Promise<any> {
+export async function detectTaskChanges(previousTasks: any[], newMeetingTasks: any[]): Promise<any> {
   const prompt = `
-You are an AI Change Detection System for project management. 
+You are an AI project task intelligence engine. 
  
- You will receive: 
+ You will receive two lists: 
  
- 1. PREVIOUS_TASKS (JSON) 
- 2. UPDATED_TASKS (JSON) 
+ 1. PREVIOUS TASKS (already stored in database) 
+ 2. CURRENT TASKS (extracted from latest meeting transcript) 
  
- Your job is to compare them and detect changes. 
+ Your job is to intelligently compare them and return the FINAL task state. 
  
- Identify: 
+ --- 
  
- 1. NEW_TASKS 
-    Tasks that appear in UPDATED_TASKS but not in PREVIOUS_TASKS. 
+ CRITICAL RULES: 
  
- 2. MODIFIED_TASKS 
-    Tasks that existed before but were updated or expanded. 
+ 1. DO NOT create duplicate tasks. 
+ 2. DO NOT paraphrase task titles. 
+ 3. If a task is similar, ALWAYS reuse the exact title from PREVIOUS TASKS. 
+ 4. Matching should be based on meaning, not exact string match. 
+ 5. Your goal is to maintain task continuity across meetings. 
  
- 3. UNCHANGED_TASKS 
-    Tasks that stayed the same. 
+ --- 
  
- Return JSON: 
+ TASK CLASSIFICATION: 
+ 
+ - NEW → task appears only in CURRENT TASKS 
+ - MODIFIED → same task but any field changed (dueDate, assignee, description) 
+ - DELETED → task existed before but not present now 
+ - UNCHANGED → no changes 
+ 
+ --- 
+ 
+ FOR MODIFIED TASKS: 
+ 
+ You MUST include detailed changes: 
+ 
+ Example: 
+ "changes": { 
+   "dueDate": { "old": "March 20", "new": "March 24" }, 
+   "assignee": { "old": "Anita Sharma", "new": "Rahul Verma" } 
+ } 
+ 
+ --- 
+ 
+ IMPORTANT MATCHING RULE: 
+ 
+ If you see: 
+ 
+ PREVIOUS: "Set up the Node.js backend architecture and configure the Express API framework" 
+ 
+ CURRENT: "Node.js backend architecture work" 
+ 
+ → These are SAME tasks → mark as MODIFIED or UNCHANGED  
+ → DO NOT create a new task  
+ → ALWAYS use the PREVIOUS title 
+ 
+ --- 
+ 
+ OUTPUT FORMAT (STRICT JSON ONLY): 
  
  { 
- "new_tasks": [], 
- "modified_tasks": [], 
- "unchanged_tasks": [] 
- }
+   "tasks": [ 
+     { 
+       "title": "Exact title from previous tasks or new task", 
+       "status": "NEW | MODIFIED | DELETED | UNCHANGED", 
+       "changes": { 
+         "dueDate": { "old": "", "new": "" }, 
+         "assignee": { "old": "", "new": "" } 
+       } 
+     } 
+   ] 
+ } 
+ 
+ --- 
+ 
+ ADDITIONAL RULES: 
+ 
+ - Do NOT include "changes" for NEW, DELETED, or UNCHANGED tasks 
+ - Only include fields that actually changed 
+ - If no change, mark as UNCHANGED 
+ - Always return ALL tasks (previous + new perspective) 
+ 
+ --- 
+ 
+ GOAL: 
+ 
+ Return a clean, deduplicated, intelligent task list that represents the true project state after the latest meeting.
 
- PREVIOUS_TASKS:
+ PREVIOUS TASKS:
  ${JSON.stringify(previousTasks, null, 2)}
 
- UPDATED_TASKS:
- ${JSON.stringify(updatedTasks, null, 2)}
+ CURRENT TASKS:
+ ${JSON.stringify(newMeetingTasks, null, 2)}
 `;
 
   const response = await callAIProvider(prompt);

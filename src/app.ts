@@ -8,6 +8,7 @@ import * as authModule from './modules/auth/auth.routes';
 import { orgRoutes } from './modules/organizations/org.routes';
 import { meetingRoutes } from './modules/meetings/meeting.routes';
 import { projectRoutes } from './modules/projects/project.routes';
+import { membersRoutes } from './modules/members/members.routes';
 import { chatRoutes } from './modules/chat/chat.routes';
 import { integrationRoutes } from './modules/integrations/integration.routes';
 import { googleCalendarRoutes } from './modules/integrations/google-calendar.routes';
@@ -112,6 +113,7 @@ export async function buildApp() {
   await app.register(orgRoutes);
   await app.register(meetingRoutes);
   await app.register(projectRoutes);
+  await app.register(membersRoutes);
   await app.register(chatRoutes);
   await app.register(integrationRoutes);
   await app.register(googleCalendarRoutes);

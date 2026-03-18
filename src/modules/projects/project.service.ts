@@ -110,17 +110,113 @@ export async function mergeMeetingToProject(orgId: string, projectId: string, me
   return merged;
 }
 
-export async function detectProjectTaskChanges(projectId: string, updatedTasks: any[]) {
-  const tasks = await (prisma as any).projectTask.findMany({ where: { projectId } });
-  const previousTasks = tasks.map((t: any) => ({
-    id: t.id,
-    task: t.title,
-    owner: t.assigneeUserId,
-    deadline: t.dueDate ? t.dueDate.toISOString() : 'Not mentioned',
-    status: t.status
-  }));
+export async function detectProjectTaskChanges(projectId: string, newMeetingTasks: any[]) {
+    // 1. Fetch existing project tasks from the database
+    const previousTasks = await (prisma as any).projectTask.findMany({
+        where: { projectId },
+    });
 
-  return await detectTaskChanges(previousTasks, updatedTasks);
+    const previousTaskPayload = previousTasks.map((t: any) => ({
+        title: t.title,
+        status: t.status,
+        description: t.description,
+        priority: t.priority,
+        dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+        assigneeId: t.assigneeUserId
+    }));
+
+    // 2. Call detectTaskChanges from ai.service.ts
+    const aiResult = await detectTaskChanges(previousTaskPayload, newMeetingTasks);
+
+    // 3. Process AI result
+    if (!aiResult || !Array.isArray(aiResult.tasks)) {
+        console.error("AI service returned unexpected data for task sync:", aiResult);
+        return { status: 'failed', error: 'Unexpected AI response' };
+    }
+
+    const summary = { created: 0, updated: 0, deleted: 0, ignored: 0, failed: 0 };
+
+    for (const task of aiResult.tasks) {
+        if (!task || !task.status || !task.title) {
+            console.warn("Skipping invalid task object from AI:", task);
+            summary.failed++;
+            continue;
+        }
+
+        try {
+            switch (task.status) {
+                case 'NEW':
+                    await (prisma as any).projectTask.create({
+                        data: {
+                            projectId,
+                            title: task.title,
+                            status: 'NOT_STARTED',
+                        },
+                    });
+                    summary.created++;
+                    break;
+
+                case 'MODIFIED':
+                    // Find the task by title (since AI is told not to paraphrase)
+                    const taskToUpdate = previousTasks.find(
+                        (t: any) => t.title === task.title
+                    );
+                    if (taskToUpdate) {
+                        const data: any = { title: task.title };
+                        
+                        // Apply changes from AI result if provided in the 'changes' object
+                        if (task.changes) {
+                            if (task.changes.dueDate?.new) {
+                                data.dueDate = new Date(task.changes.dueDate.new);
+                            }
+                            if (task.changes.description?.new) {
+                                data.description = task.changes.description.new;
+                            }
+                            // In a more complete system, we'd also handle assigneeId mapping here
+                        }
+
+                        await (prisma as any).projectTask.update({
+                            where: { id: taskToUpdate.id },
+                            data,
+                        });
+                        summary.updated++;
+                    } else {
+                        console.warn(`Could not find task to modify: ${task.title}`);
+                        summary.failed++;
+                    }
+                    break;
+
+                case 'DELETED':
+                    const taskToMarkCompleted = previousTasks.find(
+                        (t: any) => t.title === task.title
+                    );
+                    if (taskToMarkCompleted) {
+                        await (prisma as any).projectTask.update({
+                            where: { id: taskToMarkCompleted.id },
+                            data: { status: 'COMPLETED' },
+                        });
+                        summary.deleted++;
+                    } else {
+                        console.warn(`Could not find task to mark as deleted/completed: ${task.title}`);
+                        summary.failed++;
+                    }
+                    break;
+
+                case 'UNCHANGED':
+                    summary.ignored++;
+                    break;
+
+                default:
+                    console.warn(`Unknown status from AI: ${task.status}`);
+                    summary.ignored++;
+                    break;
+            }
+        } catch (error) {
+            console.error(`Failed to process task '${task.title}':`, error);
+            summary.failed++;
+        }
+    }
+    return { status: 'success', summary };
 }
 
 export async function createProject(orgId: string, creatorUserId: string, input: any) {

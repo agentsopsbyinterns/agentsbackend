@@ -7,7 +7,7 @@ import { badRequest, conflict, notFound, unauthorized } from '../../common/error
 import { sendMail } from '../../common/utils/mailer';
 import { env } from '../../config/env';
 
-export async function signup(input: SignupInput) {
+export async function signup(input: SignupInput & { organizationId?: string; projectId?: string; token?: string }) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) {
     const raw = (existing as any).passwordHash as string | null | undefined;
@@ -18,9 +18,29 @@ export async function signup(input: SignupInput) {
         where: { id: existing.id },
         data: {
           name: input.name,
-          passwordHash: newHash
+          passwordHash: newHash,
+          organizationId: input.organizationId || existing.organizationId
         }
       });
+
+      // If we have a project token, add them to the project now
+      if (input.token && input.projectId) {
+        const tokenHash = sha256(input.token);
+        const invite = await prisma.projectInvite.findUnique({ where: { tokenHash } });
+        if (invite && !invite.used && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
+           await (prisma.projectMember as any).upsert({
+             where: { userId_projectId: { userId: updated.id, projectId: input.projectId } },
+             update: { projectRole: invite.projectRole },
+             create: {
+               userId: updated.id,
+               projectId: input.projectId,
+               projectRole: invite.projectRole
+             }
+           });
+           await prisma.projectInvite.update({ where: { id: invite.id }, data: { used: true } });
+        }
+      }
+
       const accessToken = signAccessToken({
         sub: updated.id,
         email: updated.email,
@@ -44,16 +64,44 @@ export async function signup(input: SignupInput) {
   }
   const passwordHash = await hashPassword(input.password);
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const org = await tx.organization.create({ data: { name: input.organizationName } });
+    let orgId = input.organizationId;
+    let org;
+    if (!orgId) {
+      org = await tx.organization.create({ data: { name: input.organizationName } });
+      orgId = org.id;
+    } else {
+      org = await tx.organization.findUnique({ where: { id: orgId } });
+      if (!org) throw notFound('Organization not found');
+    }
+
     const user = await tx.user.create({
       data: {
         email: input.email,
         name: input.name,
         passwordHash,
-        organizationId: org.id,
-        role: 'ADMIN'
+        organizationId: orgId,
+        role: input.organizationId ? 'MEMBER' : 'ADMIN'
       }
     });
+
+    // If we have a project token, add them to the project now
+    if (input.token && input.projectId) {
+      const tokenHash = sha256(input.token);
+      const invite = await tx.projectInvite.findUnique({ where: { tokenHash } });
+      if (invite && !invite.used && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
+         await (tx.projectMember as any).upsert({
+           where: { userId_projectId: { userId: user.id, projectId: input.projectId } },
+           update: { projectRole: invite.projectRole },
+           create: {
+             userId: user.id,
+             projectId: input.projectId,
+             projectRole: invite.projectRole
+           }
+         });
+         await tx.projectInvite.update({ where: { id: invite.id }, data: { used: true } });
+      }
+    }
+
     return { org, user };
   });
 
@@ -62,7 +110,7 @@ export async function signup(input: SignupInput) {
     email: result.user.email,
     organizationId: result.user.organizationId,
     role: result.user.role,
-    globalRole: (result.user as any).globalRole || 'ADMIN'
+    globalRole: (result.user as any).globalRole || (input.organizationId ? 'TEAM_MEMBER' : 'ADMIN')
   });
   const rawRefresh = generateRandomToken(32);
   const refreshHash = sha256(rawRefresh);
