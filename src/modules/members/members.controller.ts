@@ -1,7 +1,6 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { getProjectMembers, inviteMember, removeMember, updateMemberRole, acceptProjectInvite } from './members.service';
-import { prisma } from '../../prisma/client';
 
 export const MembersController = {
   getMembers: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -35,22 +34,17 @@ export const MembersController = {
 
   inviteMember: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!(request as any).user) return reply.status(401).send({ message: 'Unauthorized' });
+    if (!(request as any).user.organizationId) {
+      return reply.status(400).send({ message: 'User organization ID is missing' });
+    }
     const { projectId } = request.params as any;
     const { email, role } = request.body as any;
     try {
       console.log('Controller: inviteMember request params:', request.params);
       console.log('Controller: inviteMember request body:', request.body);
       console.log('Controller: user organizationId:', (request as any).user.organizationId);
-      let orgId = (request as any).user.organizationId;
-      if (!orgId) {
-        const dbUser = await prisma.user.findUnique({ where: { id: (request as any).user.id } });
-        orgId = dbUser?.organizationId as string | undefined;
-        if (!orgId) {
-          return reply.status(400).send({ message: 'User organization context is missing' });
-        }
-      }
       
-      const result = await inviteMember(projectId, orgId, email, role);
+      const result = await inviteMember(projectId, (request as any).user.organizationId, email, role);
       if (result && 'message' in result && result.message === 'User already in project') {
         return reply.code(200).send(result);
       }

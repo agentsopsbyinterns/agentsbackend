@@ -25,7 +25,7 @@ export function requireGlobalRole(roles: Array<'ADMIN' | 'PROJECT_MANAGER' | 'TE
   };
 }
 
-export function requireProjectRole(roles: Array<'OWNER' | 'CONTRIBUTOR' | 'VIEWER'>) {
+export function requireProjectRole(roles: Array<'OWNER' | 'EDITOR' | 'VIEWER'>) {
   return async (request: FastifyRequest) => {
     if (!request.user) {
       throw unauthorized();

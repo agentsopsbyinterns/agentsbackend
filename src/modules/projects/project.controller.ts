@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
-import { createProject, deleteProject, getProject, listProjects, listProjectsForUser, listTasks, projectMetrics, updateProject, inviteTeamMember, updateProjectMemberRole, deleteProjectMember, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks, listMilestones, createMilestone, updateMilestone, deleteMilestone, listRisks, createRisk, updateRisk, deleteRisk } from './project.service';
+import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, updateProjectMemberRole, deleteProjectMember, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks, listMilestones, createMilestone, updateMilestone, deleteMilestone, listRisks, createRisk, updateRisk, deleteRisk } from './project.service';
 
 export const ProjectController = {
   mergeMeeting: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -21,20 +21,7 @@ export const ProjectController = {
   list: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const { skip, take, page, pageSize } = getPagination(request.query as any);
-    const assignedToMeParam = (request.query as any)?.assignedToMe;
-    const assignedToMe =
-      assignedToMeParam === true ||
-      assignedToMeParam === 'true' ||
-      assignedToMeParam === '1';
-    const role = (request.user as any).globalRole || request.user.role;
-    const { items, total } = await listProjectsForUser(
-      request.user.organizationId,
-      request.user.id,
-      role as any,
-      skip,
-      take,
-      assignedToMe
-    );
+    const { items, total } = await listProjects(request.user.organizationId, skip, take);
     return reply.send({ page, pageSize, total, items });
   },
   archive: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -91,17 +78,7 @@ export const ProjectController = {
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
-    // Ensure access by membership, not only creator
-    const membership = await (require('../../prisma/client') as any).prisma.projectMember.findFirst({
-      where: { projectId: id, userId: request.user.id }
-    });
-    const global = (request.user as any).globalRole || request.user.role;
-    const hasGlobalAccess = global === 'ADMIN' || global === 'PROJECT_MANAGER';
-    if (!hasGlobalAccess && !membership) {
-      return reply.status(403).send({ error: 'Forbidden' });
-    }
     const p = await getProject(request.user.organizationId, id);
-    if (!p) return reply.status(404).send({ error: 'Not found' });
     return reply.send(p);
   },
   create: async (request: FastifyRequest, reply: FastifyReply) => {

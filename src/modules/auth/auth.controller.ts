@@ -53,9 +53,7 @@ export const AuthController = {
       setRefreshCookie(reply, result.refreshCookieValue);
       return reply.send({ user: result.user, accessToken: result.accessToken });
     } catch (err: any) {
-      console.error('Login error:', err?.message || err);
-      const code = err?.status || 500;
-      return reply.status(code).send({ error: err?.message || 'Login failed' });
+      return reply.status(503).send({ error: 'Database unavailable', code: 'DB_UNAVAILABLE' });
     }
   },
   logout: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -79,9 +77,7 @@ export const AuthController = {
       setRefreshCookie(reply, result.newRefresh);
       return reply.send({ accessToken: result.accessToken });
     } catch (err: any) {
-      console.error('Refresh error:', err?.message || err);
-      const code = err?.status || 500;
-      return reply.status(code).send({ error: err?.message || 'Refresh failed' });
+      return reply.status(503).send({ error: 'Database unavailable', code: 'DB_UNAVAILABLE' });
     }
   },
   forgotPassword: async (request: FastifyRequest, reply: FastifyReply) => {

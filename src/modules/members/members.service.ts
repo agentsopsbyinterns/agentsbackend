@@ -98,16 +98,6 @@ export async function getProjectMembers(projectId: string) {
 }
 
 // Invite a new member to a project
-function mapToPrismaProjectRole(role: string | undefined | null): ProjectRole {
-  const r = String(role || '').toUpperCase();
-  if (r === 'OWNER') return 'OWNER' as unknown as ProjectRole;
-  if (r === 'CONTRIBUTOR') return 'CONTRIBUTOR' as unknown as ProjectRole;
-  if (r === 'VIEWER') return 'VIEWER' as unknown as ProjectRole;
-  // Map non-enum UI roles to closest enum (contributor/editor)
-  if (r === 'ADMIN' || r === 'PROJECT_MANAGER') return 'CONTRIBUTOR' as unknown as ProjectRole;
-  return 'VIEWER' as unknown as ProjectRole;
-}
-
 export async function inviteMember(projectId: string, orgId: string, email: string, role: string) {
   console.log('inviteMember called with:', { projectId, orgId, email, role });
   
@@ -133,39 +123,22 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
       return { message: 'User already in project' };
     }
 
-    const prismaRole = mapToPrismaProjectRole(role);
-    console.log('prismaRole to use:', prismaRole);
+    const validRoles = [
+      "OWNER",
+      "ADMIN",
+      "PROJECT_MANAGER",
+      "CONTRIBUTOR",
+      "VIEWER",
+    ];
 
-    // If user already exists (not a newly invited placeholder), create membership immediately
-    if (user.passwordHash && user.passwordHash !== 'INVITED_USER') {
-      await (prisma.projectMember as any).upsert({
-        where: { userId_projectId: { userId: user.id, projectId } },
-        update: { projectRole: prismaRole },
-        create: { userId: user.id, projectId, projectRole: prismaRole }
-      });
-      try {
-        const projectLink = `${env.APP_URL}/projects/${projectId}`;
-        const projectName = project?.name || "a project";
-        await sendMail({
-          to: email,
-          subject: "You’ve been added to a project",
-          html: `
-            <div style="font-family:Arial,Helvetica,sans-serif;background:#f9fafb;padding:30px">
-              <div style="max-width:500px;margin:auto;background:white;padding:30px;border-radius:10px;border:1px solid #eee">
-                <h2 style="margin-top:0;color:#111">AgentOps</h2>
-                <p style="font-size:16px;color:#333">You have been added to <strong>${projectName}</strong> as <strong>${String(prismaRole)}</strong>.</p>
-                <div style="margin:25px 0;text-align:center">
-                  <a href="${projectLink}" style="background:#6366f1;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;">Open Project</a>
-                </div>
-              </div>
-            </div>
-          `
-        });
-      } catch (e) {
-        console.error('Failed to send member added email:', e);
-      }
-      return { message: 'Member added to project', member: { userId: user.id, projectId, projectRole: prismaRole } };
+    let prismaRole: ProjectRole = "VIEWER" as ProjectRole;
+
+    if (role && typeof role === 'string' && validRoles.includes(role.toUpperCase())) {
+      prismaRole = role.toUpperCase() as ProjectRole;
+    } else {
+      console.warn(`Invalid role "${role}" provided for invite. Defaulting to VIEWER.`);
     }
+    console.log('prismaRole to use:', prismaRole);
 
     // Create a ProjectInvite record with a token
     const token = generateRandomToken(32);
@@ -281,7 +254,21 @@ export async function removeMember(projectId: string, memberId: string) {
 
 // Update a member's role
 export async function updateMemberRole(projectId: string, memberId: string, role: string) {
-  const prismaRole = mapToPrismaProjectRole(role);
+  const validRoles = [
+    "OWNER",
+    "ADMIN",
+    "PROJECT_MANAGER",
+    "CONTRIBUTOR",
+    "VIEWER",
+  ];
+
+  let prismaRole: ProjectRole = "VIEWER" as ProjectRole;
+
+  if (role && typeof role === 'string' && validRoles.includes(role.toUpperCase())) {
+    prismaRole = role.toUpperCase() as ProjectRole;
+  } else {
+    console.warn(`Invalid role "${role}" provided for update. Defaulting to VIEWER.`);
+  }
 
   // Try updating ProjectMember first
   const member = await (prisma.projectMember as any).findUnique({
