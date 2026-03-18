@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
-import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, acceptProjectInvite, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks } from './project.service';
+import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, updateProjectMemberRole, deleteProjectMember, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks, listMilestones, createMilestone, updateMilestone, deleteMilestone, listRisks, createRisk, updateRisk, deleteRisk } from './project.service';
 
 export const ProjectController = {
   mergeMeeting: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -53,16 +53,26 @@ export const ProjectController = {
     const result = await getProjectIntegrations(request.user.organizationId);
     return reply.send(result);
   },
+  updateMemberRole: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const projectId = (request.params as any).id;
+    const memberId = (request.params as any).memberId;
+    const body = request.body as any;
+    const result = await updateProjectMemberRole(projectId, memberId, body.role);
+    return reply.send(result);
+  },
+  removeMember: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const projectId = (request.params as any).id;
+    const memberId = (request.params as any).memberId;
+    await deleteProjectMember(projectId, memberId);
+    return reply.send({ success: true });
+  },
   invite: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
     const body = request.body as any;
     const result = await inviteTeamMember(id, body.email, body.role);
-    return reply.send(result);
-  },
-  acceptInvite: async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = request.body as any;
-    const result = await acceptProjectInvite(body.token, body.password);
     return reply.send(result);
   },
   get: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -176,6 +186,50 @@ export const ProjectController = {
     if (!request.user) throw unauthorized();
     const expenseId = (request.params as any).expenseId;
     await deleteExpense(expenseId);
+    return reply.send({ success: true });
+  },
+  milestones: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).id;
+    const items = await listMilestones(id);
+    return reply.send({ items });
+  },
+  createMilestone: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).id;
+    const body = request.body as any;
+    const item = await createMilestone(id, body.title, body.dueDate, body.status, body.progress);
+    return reply.code(201).send(item);
+  },
+  updateMilestone: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).milestoneId;
+    const body = request.body as any;
+    const item = await updateMilestone(id, body.title, body.dueDate, body.status, body.progress);
+    return reply.send(item);
+  },
+  deleteMilestone: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).milestoneId;
+    await deleteMilestone(id);
+    return reply.send({ success: true });
+  },
+  risks: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).id;
+    const items = await listRisks(id);
+    return reply.send({ items });
+  },
+  createRisk: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).id;
+    const body = request.body as any;
+    const item = await createRisk(id, body.title, body.description, body.severity, body.status);
+    return reply.code(201).send(item);
+  },
+  updateRisk: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).riskId;
+    const body = request.body as any;
+    const item = await updateRisk(id, body.title, body.description, body.severity, body.status);
+    return reply.send(item);
+  },
+  deleteRisk: async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as any).riskId;
+    await deleteRisk(id);
     return reply.send({ success: true });
   }
 };

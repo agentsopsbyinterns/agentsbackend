@@ -1,6 +1,6 @@
 import { prisma } from '../../prisma/client';
-import { signAccessToken } from '../../common/utils/tokens';
 import { mergeProjectData, detectTaskChanges } from '../../services/ai.service';
+import { badRequest, notFound } from '../../common/errors/api-error';
 
 export async function listProjects(orgId: string, skip: number, take: number) {
   const [items, total] = await Promise.all([
@@ -136,11 +136,7 @@ export async function createProject(orgId: string, creatorUserId: string, input:
     createdById: creatorUserId
   };
   const project = await (prisma as any).project.create({ data });
-  await (prisma as any).projectMember.upsert({
-    where: { userId_projectId: { userId: creatorUserId, projectId: project.id } },
-    update: { projectRole: 'OWNER' },
-    create: { userId: creatorUserId, projectId: project.id, projectRole: 'OWNER' }
-  });
+  await (prisma as any).projectMember.upsert({    where: { userId_projectId: { userId: creatorUserId, projectId: project.id } },    update: { projectRole: 'OWNER' },    create: { userId: creatorUserId, projectId: project.id, projectRole: 'OWNER' }  });
   return project;
 }
 
@@ -213,71 +209,45 @@ export async function updateExpense(id: string, input: { amount?: number; descri
 export async function deleteExpense(id: string) {
   return (prisma as any).projectExpense.delete({ where: { id } });
 }
-export async function inviteTeamMember(projectId: string, email: string, role: 'OWNER' | 'EDITOR' | 'VIEWER') {
+export async function inviteTeamMember(projectId: string, email: string, role: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER') {
+  if (!projectId) throw badRequest("Project ID required");
+  if (!email) throw badRequest("Email required");
+
   const user = await (prisma as any).user.findUnique({ where: { email } });
-  if (user) {
-    const member = await (prisma as any).projectMember.upsert({
-      where: { userId_projectId: { userId: user.id, projectId } },
-      update: { projectRole: role },
-      create: { userId: user.id, projectId, projectRole: role }
-    });
-    return { added: true, inviteSent: false, member };
-  }
-  const raw = cryptoRandom();
-  const tokenHash = sha256(raw);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
-  const invite = await (prisma as any).projectInvite.upsert({
-    where: { projectId_email: { projectId, email } },
-    update: { projectRole: role, tokenHash, expiresAt, used: false },
-    create: { projectId, email, projectRole: role, tokenHash, expiresAt }
+  if (!user) throw notFound("User not found");
+
+  const existing = await (prisma as any).projectMember.findUnique({
+    where: { userId_projectId: { userId: user.id, projectId } }
   });
-  const link = `${process.env.APP_URL || 'http://localhost:3000'}/accept-invite?token=${raw}`;
-  await sendMail({
-    to: email,
-    subject: 'Project Invitation',
-    html: `<p>You have been invited to a project.</p><p><a href="${link}">${link}</a></p>`
+
+  if (existing) throw badRequest("User is already a member of this project");
+
+  return (prisma as any).projectMember.create({
+    data: {
+      userId: user.id,
+      projectId,
+      projectRole: role
+    }
   });
-  return { added: false, inviteSent: true, invite };
 }
 
-export async function acceptProjectInvite(rawToken: string, password: string) {
-  const tokenHash = sha256(rawToken);
-  const invite = await (prisma as any).projectInvite.findUnique({ where: { tokenHash } });
-  if (!invite || invite.used || invite.expiresAt < new Date()) {
-    throw new Error('Invalid or expired invite');
-  }
-  const project = await (prisma as any).project.findUnique({ where: { id: invite.projectId } });
-  if (!project) throw new Error('Project not found');
-  let user = await (prisma as any).user.findUnique({ where: { email: invite.email } });
-  if (!user) {
-    const hash = await hashPassword(password);
-    user = await (prisma as any).user.create({
-      data: {
-        email: invite.email,
-        passwordHash: hash,
-        name: invite.email.split('@')[0],
-        organizationId: project.organizationId,
-        role: 'MEMBER',
-        globalRole: 'TEAM_MEMBER'
-      }
-    });
-  }
-  await (prisma as any).projectMember.upsert({
-    where: { userId_projectId: { userId: user.id, projectId: invite.projectId } },
-    update: { projectRole: invite.projectRole },
-    create: { userId: user.id, projectId: invite.projectId, projectRole: invite.projectRole }
-  });
-  await (prisma as any).projectInvite.update({ where: { id: invite.id }, data: { used: true } });
+export async function updateProjectMemberRole(projectId: string, memberId: string, role: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER') {
+  const validRoles = ["OWNER", "CONTRIBUTOR", "VIEWER"];
+  if (!validRoles.includes(role)) throw badRequest("Invalid role");
 
-  const accessToken = signAccessToken({
-    sub: user.id,
-    email: user.email,
-    organizationId: user.organizationId,
-    role: user.role,
-    globalRole: (user as any).globalRole || 'TEAM_MEMBER'
+  return (prisma as any).projectMember.update({
+    where: { userId_projectId: { userId: memberId, projectId } },
+    data: { projectRole: role }
   });
-  return { user, accessToken };
 }
+
+export async function deleteProjectMember(projectId: string, memberId: string) {
+  return (prisma as any).projectMember.delete({
+    where: { userId_projectId: { userId: memberId, projectId } }
+  });
+}
+
+
 
 export async function createTask(projectId: string, title: string, assigneeUserId?: string, dueDate?: string, description?: string, status?: string, priority?: string, meetingId?: string) {
   const data: any = { projectId, title };
@@ -303,6 +273,56 @@ export async function updateTask(id: string, title?: string, status?: string, as
 
 export async function deleteTask(id: string) {
   return (prisma as any).projectTask.delete({ where: { id } });
+}
+
+export async function listMilestones(projectId: string) {
+  return (prisma as any).projectMilestone.findMany({ where: { projectId }, orderBy: { dueDate: 'asc' } });
+}
+
+export async function createMilestone(projectId: string, title: string, dueDate?: string, status?: string, progress?: number) {
+  const data: any = { projectId, title };
+  if (dueDate) data.dueDate = new Date(dueDate);
+  if (status) data.status = status;
+  if (progress !== undefined) data.progress = progress;
+  return (prisma as any).projectMilestone.create({ data });
+}
+
+export async function updateMilestone(id: string, title?: string, dueDate?: string, status?: string, progress?: number) {
+  const data: any = {};
+  if (title !== undefined) data.title = title;
+  if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
+  if (status !== undefined) data.status = status;
+  if (progress !== undefined) data.progress = progress;
+  return (prisma as any).projectMilestone.update({ where: { id }, data });
+}
+
+export async function deleteMilestone(id: string) {
+  return (prisma as any).projectMilestone.delete({ where: { id } });
+}
+
+export async function listRisks(projectId: string) {
+  return (prisma as any).projectRisk.findMany({ where: { projectId }, orderBy: { updatedAt: 'desc' } });
+}
+
+export async function createRisk(projectId: string, title: string, description?: string, severity?: string, status?: string) {
+  const data: any = { projectId, title };
+  if (description) data.description = description;
+  if (severity) data.severity = severity;
+  if (status) data.status = status;
+  return (prisma as any).projectRisk.create({ data });
+}
+
+export async function updateRisk(id: string, title?: string, description?: string, severity?: string, status?: string) {
+  const data: any = {};
+  if (title !== undefined) data.title = title;
+  if (description !== undefined) data.description = description;
+  if (severity !== undefined) data.severity = severity;
+  if (status !== undefined) data.status = status;
+  return (prisma as any).projectRisk.update({ where: { id }, data });
+}
+
+export async function deleteRisk(id: string) {
+  return (prisma as any).projectRisk.delete({ where: { id } });
 }
 
 export async function archiveProject(orgId: string, id: string) {
@@ -355,18 +375,4 @@ export async function generateAITasks(orgId: string, id: string) {
   return tasks;
 }
 
-function sha256(input: string) {
-  return require('crypto').createHash('sha256').update(input).digest('hex');
-}
-function cryptoRandom(bytes = 32) {
-  return require('crypto').randomBytes(bytes).toString('hex');
-}
-async function hashPassword(password: string) {
-  const bcrypt = require('bcrypt');
-  const saltRounds = 10;
-  return await bcrypt.hash(password, saltRounds);
-}
-async function sendMail(options: { to: string; subject: string; html: string }) {
-  const { sendMail } = require('../../common/utils/mailer');
-  return await sendMail(options);
-}
+

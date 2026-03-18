@@ -16,7 +16,7 @@ enum GlobalRole {
 
 enum ProjectRole {
   OWNER
-  EDITOR
+  CONTRIBUTOR
   VIEWER
 }
 
@@ -184,6 +184,8 @@ model Project {
   meetings      Meeting[]
   tasks         ProjectTask[]
   members       ProjectMember[]
+  milestones    ProjectMilestone[]
+  risks         ProjectRisk[]
   createdBy     User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id])
   invites       ProjectInvite[]
   expenses      ProjectExpense[]
@@ -205,6 +207,34 @@ model ProjectMember {
   @@index([userId])
 }
 
+model ProjectMilestone {
+  id        String   @id @default(cuid())
+  projectId String
+  title     String
+  dueDate   DateTime?
+  status    String   @default("Not Started")
+  progress  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model ProjectRisk {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  severity    String   @default("medium") // low, medium, high
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
 model ProjectInvite {
   id          String      @id @default(cuid())
   projectId   String
@@ -219,6 +249,7 @@ model ProjectInvite {
   @@index([projectId])
   @@unique([projectId, email])
 }
+
 model ProjectTask {
   id         String   @id @default(cuid())
   projectId  String
