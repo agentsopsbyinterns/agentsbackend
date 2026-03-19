@@ -348,12 +348,45 @@ export async function deleteProjectMember(projectId: string, memberId: string) {
 export async function createTask(projectId: string, title: string, assigneeUserId?: string, dueDate?: string, description?: string, status?: string, priority?: string, meetingId?: string) {
   const data: any = { projectId, title };
   if (description !== undefined) data.description = description;
-  if (status !== undefined) data.status = status;
-  if (priority !== undefined) data.priority = priority;
-  if (assigneeUserId !== undefined) data.assigneeUserId = assigneeUserId;
-  if (dueDate) data.dueDate = new Date(dueDate);
-  if (meetingId !== undefined) data.meetingId = meetingId || null;
-  return (prisma as any).projectTask.create({ data });
+  
+  if (status !== undefined) {
+    const s = status.toUpperCase().replace(/\s+/g, '_');
+    if (['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(s)) {
+      data.status = s;
+    }
+  }
+  
+  if (priority !== undefined) {
+    const p = priority.toUpperCase();
+    if (['LOW', 'MEDIUM', 'HIGH'].includes(p)) {
+      data.priority = p;
+    }
+  }
+
+  if (assigneeUserId && assigneeUserId !== 'undefined' && assigneeUserId !== 'null') {
+    data.assigneeUserId = assigneeUserId;
+  }
+  
+  if (dueDate) {
+    const d = new Date(dueDate);
+    if (!isNaN(d.getTime())) {
+      data.dueDate = d;
+    }
+  }
+  
+  if (meetingId && meetingId !== 'undefined' && meetingId !== 'null') {
+    data.meetingId = meetingId;
+  }
+
+  try {
+    return await (prisma as any).projectTask.create({ data });
+  } catch (error: any) {
+    console.error('Prisma createTask error:', error);
+    if (error.code === 'P2002') {
+      throw new Error(`A task with the title "${title}" already exists in this project.`);
+    }
+    throw error;
+  }
 }
 
 export async function updateTask(id: string, title?: string, status?: string, assigneeUserId?: string, dueDate?: string, description?: string, priority?: string) {
