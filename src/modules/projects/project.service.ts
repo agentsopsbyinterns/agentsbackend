@@ -11,7 +11,33 @@ export async function listProjects(orgId: string, skip: number, take: number) {
 }
 
 export async function getProject(orgId: string, id: string) {
-  return (prisma as any).project.findFirst({ where: { id, organizationId: orgId } });
+  const project = await (prisma as any).project.findFirst({ 
+    where: { id, organizationId: orgId },
+    include: {
+      _count: {
+        select: {
+          tasks: true
+        }
+      }
+    }
+  });
+  
+  if (!project) return null;
+
+  const tasksCompleted = await (prisma as any).projectTask.count({
+    where: { projectId: id, status: 'COMPLETED' }
+  });
+
+  const budgetInfo = await getBudget(id);
+
+  return {
+    ...project,
+    tasksCompleted,
+    tasksTotal: project._count?.tasks ?? 0,
+    budget: budgetInfo?.used ?? 0,
+    budgetTotal: project.budgetTotal ?? 0,
+    remainingBudget: budgetInfo?.remaining ?? 0,
+  };
 }
 
 export async function listTasks(projectId: string) {
@@ -224,11 +250,13 @@ export async function createProject(orgId: string, creatorUserId: string, input:
     organizationId: orgId,
     name: input.name,
     client: input.client ?? null,
+    clientName: input.clientName ?? input.client ?? null,
     progress: input.progress ?? 0,
     health: input.health ?? null,
     status: input.status ?? null,
     dueDate: input.dueDate ? new Date(input.dueDate) : null,
     asanaLink: input.asanaLink ?? null,
+    budgetTotal: input.budget ? Number(input.budget) : 0,
     createdById: creatorUserId
   };
   const project = await (prisma as any).project.create({ data });
@@ -246,6 +274,7 @@ export async function updateProject(orgId: string, id: string, input: any) {
   if (input.status !== undefined) data.status = input.status;
   if (input.dueDate !== undefined) data.dueDate = input.dueDate ? new Date(input.dueDate) : null;
   if (input.asanaLink !== undefined) data.asanaLink = input.asanaLink;
+  if (input.budget !== undefined) data.budgetTotal = Number(input.budget);
   return (prisma as any).project.update({
     where: { id },
     data,
@@ -254,11 +283,19 @@ export async function updateProject(orgId: string, id: string, input: any) {
 }
 
 export async function deleteProject(orgId: string, id: string) {
-  // Soft delete for safety
-  return (prisma as any).project.update({
-    where: { id },
+  // Soft delete the project itself
+  const project = await (prisma as any).project.update({
+    where: { id, organizationId: orgId },
     data: { deletedAt: new Date() }
   });
+
+  // Also soft delete all associated meetings
+  await (prisma as any).meeting.updateMany({
+    where: { projectId: id, organizationId: orgId, deletedAt: null },
+    data: { deletedAt: new Date() }
+  });
+
+  return project;
 }
 
 export async function getBudget(projectId: string) {
