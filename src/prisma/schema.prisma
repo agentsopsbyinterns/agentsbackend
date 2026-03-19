@@ -16,6 +16,8 @@ enum GlobalRole {
 
 enum ProjectRole {
   OWNER
+  ADMIN
+  PROJECT_MANAGER
   CONTRIBUTOR
   VIEWER
 }

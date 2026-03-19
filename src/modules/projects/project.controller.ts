@@ -189,47 +189,99 @@ export const ProjectController = {
     return reply.send({ success: true });
   },
   milestones: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).id;
-    const items = await listMilestones(id);
-    return reply.send({ items });
+    try {
+      const id = (request.params as any).id;
+      if (!id) return reply.status(400).send({ error: 'Project ID is required' });
+      
+      console.log(`Fetching milestones for project ID: ${id}`);
+      const items = await listMilestones(id);
+      return reply.send({ items: items || [] });
+    } catch (error: any) {
+      console.error("Error fetching milestones:", error);
+      return reply.status(500).send({ 
+        error: 'Internal Server Error', 
+        message: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
   },
   createMilestone: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).id;
-    const body = request.body as any;
-    const item = await createMilestone(id, body.title, body.dueDate, body.status, body.progress);
-    return reply.code(201).send(item);
+    try {
+      const id = (request.params as any).id;
+      const body = request.body as any;
+      const item = await createMilestone(id, body.title, body.dueDate, body.status, body.progress);
+      if (!item) return reply.status(500).send({ error: 'Failed to create milestone' });
+      return reply.code(201).send(item);
+    } catch (error: any) {
+      return reply.status(500).send({ error: 'Internal Server Error', message: error.message });
+    }
   },
   updateMilestone: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).milestoneId;
-    const body = request.body as any;
-    const item = await updateMilestone(id, body.title, body.dueDate, body.status, body.progress);
-    return reply.send(item);
+    try {
+      const id = (request.params as any).milestoneId;
+      const body = request.body as any;
+      const item = await updateMilestone(id, body.title, body.dueDate, body.status, body.progress);
+      if (!item) return reply.status(500).send({ error: 'Failed to update milestone' });
+      return reply.send(item);
+    } catch (error: any) {
+      return reply.status(500).send({ error: 'Internal Server Error', message: error.message });
+    }
   },
   deleteMilestone: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).milestoneId;
-    await deleteMilestone(id);
-    return reply.send({ success: true });
+    try {
+      const id = (request.params as any).milestoneId;
+      await deleteMilestone(id);
+      return reply.send({ success: true });
+    } catch (error: any) {
+      return reply.status(500).send({ error: 'Internal Server Error', message: error.message });
+    }
   },
   risks: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).id;
-    const items = await listRisks(id);
-    return reply.send({ items });
+    try {
+      const id = (request.params as any).id;
+      if (!id) return reply.status(400).send({ error: 'Project ID is required' });
+
+      console.log(`Fetching risks for project ID: ${id}`);
+      const items = await listRisks(id);
+      return reply.send({ items: items || [] });
+    } catch (error: any) {
+      console.error("Error fetching risks:", error);
+      return reply.status(500).send({ 
+        error: 'Internal Server Error', 
+        message: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
   },
   createRisk: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).id;
-    const body = request.body as any;
-    const item = await createRisk(id, body.title, body.description, body.severity, body.status);
-    return reply.code(201).send(item);
+    try {
+      const id = (request.params as any).id;
+      const body = request.body as any;
+      const item = await createRisk(id, body.title, body.description, body.severity, body.status);
+      if (!item) return reply.status(500).send({ error: 'Failed to create risk' });
+      return reply.code(201).send(item);
+    } catch (error: any) {
+      return reply.status(500).send({ error: 'Internal Server Error', message: error.message });
+    }
   },
   updateRisk: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).riskId;
-    const body = request.body as any;
-    const item = await updateRisk(id, body.title, body.description, body.severity, body.status);
-    return reply.send(item);
+    try {
+      const id = (request.params as any).riskId;
+      const body = request.body as any;
+      const item = await updateRisk(id, body.title, body.description, body.severity, body.status);
+      if (!item) return reply.status(500).send({ error: 'Failed to update risk' });
+      return reply.send(item);
+    } catch (error: any) {
+      return reply.status(500).send({ error: 'Internal Server Error', message: error.message });
+    }
   },
   deleteRisk: async (request: FastifyRequest, reply: FastifyReply) => {
-    const id = (request.params as any).riskId;
-    await deleteRisk(id);
-    return reply.send({ success: true });
+    try {
+      const id = (request.params as any).riskId;
+      await deleteRisk(id);
+      return reply.send({ success: true });
+    } catch (error: any) {
+      return reply.status(500).send({ error: 'Internal Server Error', message: error.message });
+    }
   }
 };
