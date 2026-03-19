@@ -3,68 +3,48 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
-enum GlobalRole {
-  SUPER_ADMIN
-  ADMIN
-  TEAM_MEMBER
-}
-
-enum ProjectRole {
-  OWNER
-  ADMIN
-  PROJECT_MANAGER
-  CONTRIBUTOR
-  VIEWER
-}
-
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
-  users     User[]
-  meetings  Meeting[]
-  projects  Project[]
-  invites   Invite[]
-  conversations Conversation[]
+  id                     String                  @id @default(cuid())
+  name                   String
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  deletedAt              DateTime?
+  auditLogs              AuditLog[]
+  conversations          Conversation[]
   integrationConnections IntegrationConnection[]
-  auditLogs AuditLog[]
-}
-
-enum Role {
-  ADMIN
-  PM
-  MEMBER
+  invites                Invite[]
+  meetings               Meeting[]
+  projects               Project[]
+  users                  User[]
 }
 
 model User {
-  id                  String               @id @default(cuid())
-  organizationId      String
-  email               String               @unique
-  passwordHash        String
-  name                String
-  avatarUrl           String?
-  role                Role                 @default(ADMIN)
-  globalRole          GlobalRole           @default(ADMIN)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  deletedAt           DateTime?
-  passwordResetTokens PasswordResetToken[]
-  refreshTokens       RefreshToken[]
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  attendees           Attendee[]
-  messages            Message[]
-  conversationsCreated Conversation[] @relation("ConversationCreatedBy")
-  auditLogs           AuditLog[]
-  projectMemberships  ProjectMember[]
-  createdProjects     Project[]            @relation("ProjectCreatedBy")
-  assignedTasks       ProjectTask[]        @relation("TaskAssignee")
+  id                   String               @id @default(cuid())
+  organizationId       String
+  email                String               @unique
+  passwordHash         String
+  name                 String
+  role                 User_role            @default(VIEWER)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  avatarUrl            String?
+  deletedAt            DateTime?
+  globalRole           GlobalRole           @default(ADMIN)
+  attendees            Attendee[]
+  auditLogs            AuditLog[]
+  conversationsCreated Conversation[]       @relation("ConversationCreatedBy")
+  messages             Message[]
+  passwordResetTokens  PasswordResetToken[]
+  createdProjects      Project[]            @relation("ProjectCreatedBy")
+  projectMemberships   ProjectMember[]
+  assignedTasks        ProjectTask[]        @relation("TaskAssignee")
+  refreshTokens        RefreshToken[]
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
 }
@@ -93,106 +73,113 @@ model RefreshToken {
 }
 
 model Invite {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   email          String
-  status         String   @default("pending")
-  createdAt      DateTime @default(now())
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  projectId      String?
+  role           Invite_role  @default(VIEWER)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Project        Project?     @relation(fields: [projectId], references: [id])
 
   @@unique([organizationId, email])
+  @@index([projectId], map: "Invite_projectId_fkey")
 }
 
 model Meeting {
-  id              String   @id @default(cuid())
-  organizationId  String
-  title           String
-  agenda          String?
-  rawTranscript   String?  @db.LongText
-  extractionJson  Json?
-  scheduledTime   DateTime
-  projectId       String?
-  project         Project? @relation(fields: [projectId], references: [id])
-  status          String   @default("scheduled")
-  meetingLink     String?
-  botStatus       String? 
+  id               String              @id @default(cuid())
+  organizationId   String
+  title            String
+  agenda           String?
+  scheduledTime    DateTime
+  status           String              @default("scheduled")
+  meetingLink      String?
+  botStatus        String?
   transcriptStatus String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  attendees       Attendee[]
-  transcript      TranscriptSegment[]
-  actionItems     ActionItem[]
-  tasks           ProjectTask[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+  projectId        String?
+  extractionJson   String?             @db.LongText
+  rawTranscript    String?             @db.LongText
+  actionItems      ActionItem[]
+  attendees        Attendee[]
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project          Project?            @relation(fields: [projectId], references: [id])
+  tasks            ProjectTask[]
+  transcript       TranscriptSegment[]
 
   @@index([organizationId])
   @@index([projectId])
 }
 
 model Attendee {
-  id         String   @id @default(cuid())
-  meetingId  String
-  name       String
-  email      String
-  joined     Boolean  @default(false)
-  isBot      Boolean  @default(false)
-  userId     String?
-  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  user       User?    @relation(fields: [userId], references: [id])
+  id        String  @id @default(cuid())
+  meetingId String
+  name      String
+  email     String
+  joined    Boolean @default(false)
+  isBot     Boolean @default(false)
+  userId    String?
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User?   @relation(fields: [userId], references: [id])
 
   @@index([meetingId])
+  @@index([userId], map: "Attendee_userId_fkey")
 }
 
 model TranscriptSegment {
-  id         String   @id @default(cuid())
-  meetingId  String
-  speaker    String
-  timestamp  Int
-  text       String
-  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  meetingId String
+  speaker   String
+  timestamp Int
+  text      String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
 }
 
 model ActionItem {
-  id         String   @id @default(cuid())
-  meetingId  String
-  text       String
-  assignee   String?
-  dueDate    DateTime?
-  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  meetingId String
+  text      String
+  assignee  String?
+  dueDate   DateTime?
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
 }
 
 model Project {
-  id            String   @id @default(cuid())
+  id             String             @id @default(cuid())
   organizationId String
-  name          String
-  client        String?
-  clientName    String?
-  progress      Int      @default(0)
-  health        String? 
-  status        String? 
-  dueDate       DateTime?
-  asanaLink     String?
-  createdById   String?
-  budgetTotal   Decimal  @default(0) @db.Decimal(12, 2)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  deletedAt     DateTime?
-  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  meetings      Meeting[]
-  tasks         ProjectTask[]
-  members       ProjectMember[]
-  milestones    ProjectMilestone[]
-  risks         ProjectRisk[]
-  createdBy     User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id])
-  invites       ProjectInvite[]
-  expenses      ProjectExpense[]
+  name           String
+  client         String?
+  progress       Int                @default(0)
+  health         String?
+  status         String?
+  dueDate        DateTime?
+  asanaLink      String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+  clientName     String?
+  createdById    String?
+  budgetTotal    Decimal            @default(0.00) @db.Decimal(12, 2)
+  Invite         Invite[]
+  meetings       Meeting[]
+  createdBy      User?              @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  expenses       ProjectExpense[]
+  invites        ProjectInvite[]
+  members        ProjectMember[]
+  milestones     ProjectMilestone[]
+  risks          ProjectRisk[]
+  tasks          ProjectTask[]
 
   @@index([organizationId])
+  @@index([createdById], map: "Project_createdById_fkey")
 }
 
 model ProjectMember {
@@ -201,8 +188,8 @@ model ProjectMember {
   projectId   String
   projectRole ProjectRole
   joinedAt    DateTime    @default(now())
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
   @@index([projectId])
@@ -210,15 +197,15 @@ model ProjectMember {
 }
 
 model ProjectMilestone {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   projectId String
   title     String
   dueDate   DateTime?
-  status    String   @default("Not Started")
-  progress  Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status    String    @default("Not Started")
+  progress  Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
@@ -228,7 +215,7 @@ model ProjectRisk {
   projectId   String
   title       String
   description String?
-  severity    String   @default("medium") // low, medium, high
+  severity    String   @default("medium")
   status      String   @default("Active")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -248,29 +235,129 @@ model ProjectInvite {
   createdAt   DateTime    @default(now())
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
   @@unique([projectId, email])
+  @@index([projectId])
 }
 
 model ProjectTask {
-  id         String   @id @default(cuid())
-  projectId  String
-  meetingId  String?
-  title      String
-  description String?
-  status     TaskStatus @default(NOT_STARTED)
-  priority   TaskPriority @default(MEDIUM)
+  id             String       @id @default(cuid())
+  projectId      String
+  title          String
+  status         TaskStatus   @default(NOT_STARTED)
+  dueDate        DateTime?
   assigneeUserId String?
-  dueDate    DateTime?
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  meeting    Meeting? @relation(fields: [meetingId], references: [id])
-  assignee   User?    @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  description    String?
+  priority       TaskPriority @default(MEDIUM)
+  meetingId      String?
+  assignee       User?        @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  meeting        Meeting?     @relation(fields: [meetingId], references: [id])
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@unique([projectId, title])
   @@index([projectId])
   @@index([meetingId])
   @@index([assigneeUserId])
+}
 
-  @@unique([projectId, title])
+model ProjectExpense {
+  id          String    @id @default(cuid())
+  projectId   String
+  amount      Decimal   @db.Decimal(12, 2)
+  description String?
+  category    String?
+  incurredAt  DateTime?
+  createdAt   DateTime  @default(now())
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Conversation {
+  id             String       @id @default(cuid())
+  organizationId String
+  createdById    String
+  createdAt      DateTime     @default(now())
+  createdBy      User         @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages       Message[]
+
+  @@index([organizationId])
+  @@index([createdById], map: "Conversation_createdById_fkey")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String?
+  role           String
+  content        String       @db.LongText
+  meetingId      String?
+  meetingTitle   String?
+  timestamp      Int?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([conversationId])
+  @@index([userId], map: "Message_userId_fkey")
+}
+
+model Integration {
+  id          String                  @id @default(cuid())
+  name        String
+  createdAt   DateTime                @default(now())
+  connections IntegrationConnection[]
+}
+
+model IntegrationConnection {
+  id             String       @id @default(cuid())
+  organizationId String
+  integrationId  String
+  status         String       @default("disconnected")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  integration    Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, integrationId])
+  @@index([organizationId])
+  @@index([integrationId], map: "IntegrationConnection_integrationId_fkey")
+}
+
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  type       String
+  signature  String
+  payload    String   @db.LongText
+  receivedAt DateTime @default(now())
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  meta           String?      @db.LongText
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId], map: "AuditLog_userId_fkey")
+}
+
+enum GlobalRole {
+  SUPER_ADMIN
+  ADMIN
+  TEAM_MEMBER
+}
+
+enum ProjectRole {
+  OWNER
+  ADMIN
+  PROJECT_MANAGER
+  CONTRIBUTOR
+  VIEWER
 }
 
 enum TaskStatus {
@@ -285,85 +372,18 @@ enum TaskPriority {
   HIGH
 }
 
-model ProjectExpense {
-  id          String   @id @default(cuid())
-  projectId   String
-  amount      Decimal  @db.Decimal(12, 2)
-  description String?
-  category    String?
-  incurredAt  DateTime?
-  createdAt   DateTime @default(now())
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId])
+enum User_role {
+  OWNER
+  ADMIN
+  PROJECT_MANAGER
+  CONTRIBUTOR
+  VIEWER
 }
 
-model Conversation {
-  id              String   @id @default(cuid())
-  organizationId  String
-  createdById     String
-  createdAt       DateTime @default(now())
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy       User      @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  messages        Message[]
-
-  @@index([organizationId])
-}
-
-model Message {
-  id              String   @id @default(cuid())
-  conversationId  String
-  userId          String?
-  role            String
-  content         String
-  meetingId       String?
-  meetingTitle    String?
-  timestamp       Int?
-  createdAt       DateTime @default(now())
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user            User?       @relation(fields: [userId], references: [id])
-
-  @@index([conversationId])
-}
-
-model Integration {
-  id          String   @id @default(cuid())
-  name        String
-  createdAt   DateTime @default(now())
-  connections IntegrationConnection[]
-}
-
-model IntegrationConnection {
-  id            String   @id @default(cuid())
-  organizationId String
-  integrationId String
-  status        String   @default("disconnected")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  integration   Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@unique([organizationId, integrationId])
-}
-
-model WebhookEvent {
-  id         String   @id @default(cuid())
-  type       String
-  signature  String
-  payload    Json
-  receivedAt DateTime @default(now())
-}
-
-model AuditLog {
-  id            String   @id @default(cuid())
-  organizationId String
-  userId        String?
-  action        String
-  meta          Json?
-  createdAt     DateTime @default(now())
-  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user          User? @relation(fields: [userId], references: [id])
-
-  @@index([organizationId])
+enum Invite_role {
+  OWNER
+  ADMIN
+  PROJECT_MANAGER
+  CONTRIBUTOR
+  VIEWER
 }

@@ -8,7 +8,11 @@ export function sseInit(reply: FastifyReply) {
 }
 
 export function sseSend(reply: FastifyReply, data: any) {
-  reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+  try {
+    reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+  } catch (err) {
+    console.error('SSE send error:', err);
+  }
 }
 
 export function sseClose(reply: FastifyReply) {

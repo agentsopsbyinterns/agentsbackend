@@ -21,7 +21,15 @@ export const ProjectController = {
   list: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const { skip, take, page, pageSize } = getPagination(request.query as any);
-    const { items, total } = await listProjects(request.user.organizationId, skip, take);
+    const q = request.query as any;
+    const { items, total } = await listProjects(request.user.organizationId, skip, take, {
+      search: q.search,
+      health: q.health,
+      status: q.status,
+      client: q.client,
+      assignedToMe: q.assignedToMe === 'true',
+      userId: request.user.id
+    });
     return reply.send({ page, pageSize, total, items });
   },
   archive: async (request: FastifyRequest, reply: FastifyReply) => {
