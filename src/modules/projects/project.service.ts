@@ -2,12 +2,89 @@ import { prisma } from '../../prisma/client';
 import { mergeProjectData, detectTaskChanges } from '../../services/ai.service';
 import { badRequest, notFound } from '../../common/errors/api-error';
 
-export async function listProjects(orgId: string, skip: number, take: number) {
+export async function listProjects(orgId: string, skip: number, take: number, filters?: { search?: string; health?: string; status?: string; client?: string; assignedToMe?: boolean; userId?: string }) {
+  const where: any = { organizationId: orgId, deletedAt: null, AND: [] };
+
+  if (filters?.search) {
+    where.AND.push({
+      OR: [
+        { name: { contains: filters.search } },
+        { client: { contains: filters.search } },
+        { clientName: { contains: filters.search } }
+      ]
+    });
+  }
+
+  if (filters?.health) {
+    where.AND.push({ health: filters.health });
+  }
+
+  if (filters?.status) {
+    where.AND.push({ status: filters.status });
+  }
+
+  if (filters?.client) {
+    where.AND.push({
+      OR: [
+        { client: { contains: filters.client } },
+        { clientName: { contains: filters.client } }
+      ]
+    });
+  }
+
+  if (filters?.assignedToMe && filters.userId) {
+    where.AND.push({
+      members: {
+        some: {
+          userId: filters.userId
+        }
+      }
+    });
+  }
+
+  if (where.AND.length === 0) delete where.AND;
+
   const [items, total] = await Promise.all([
-    (prisma as any).project.findMany({ where: { organizationId: orgId, deletedAt: null }, orderBy: { updatedAt: 'desc' }, skip, take }),
-    (prisma as any).project.count({ where: { organizationId: orgId, deletedAt: null } })
+    (prisma as any).project.findMany({ 
+      where, 
+      orderBy: { updatedAt: 'desc' }, 
+      skip, 
+      take,
+      include: {
+        _count: {
+          select: { tasks: true }
+        }
+      }
+    }),
+    (prisma as any).project.count({ where })
   ]);
-  return { items, total };
+
+  // Enrich with completed tasks and progress
+   const enrichedItems = await Promise.all(items.map(async (p: any) => {
+     const tasksCompleted = await (prisma as any).projectTask.count({
+       where: { projectId: p.id, status: 'COMPLETED' }
+     });
+     const tasksTotal = p._count?.tasks ?? 0;
+     const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+     
+     // Return a plain object to ensure all fields are correctly serialized
+     return {
+       ...p,
+       id: p.id,
+       name: p.name,
+       client: p.client || p.clientName || '',
+       dueDate: p.dueDate,
+       status: p.status,
+       health: p.health || 'on-track',
+       progress,
+       tasksTotal,
+       tasksCompleted,
+       asanaLink: p.asanaLink,
+       updatedAt: p.updatedAt
+     };
+   }));
+
+  return { items: enrichedItems, total };
 }
 
 export async function getProject(orgId: string, id: string) {
@@ -29,13 +106,16 @@ export async function getProject(orgId: string, id: string) {
   });
 
   const budgetInfo = await getBudget(id);
+  const tasksTotal = project._count?.tasks ?? 0;
+  const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
 
   return {
     ...project,
     tasksCompleted,
-    tasksTotal: project._count?.tasks ?? 0,
+    tasksTotal,
+    progress,
     budget: budgetInfo?.used ?? 0,
-    budgetTotal: project.budgetTotal ?? 0,
+    budgetTotal: budgetInfo?.budget ?? 0,
     remainingBudget: budgetInfo?.remaining ?? 0,
   };
 }
