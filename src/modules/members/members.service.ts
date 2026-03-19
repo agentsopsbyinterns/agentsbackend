@@ -123,18 +123,15 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
       return { message: 'User already in project' };
     }
 
-    const validRoles = [
-      "OWNER",
-      "ADMIN",
-      "PROJECT_MANAGER",
-      "CONTRIBUTOR",
-      "VIEWER",
-    ];
+    const normalizedRole = role ? role.toUpperCase().replace(/\s+/g, '_') : '';
+    let prismaRole: ProjectRole = 'VIEWER';
 
-    let prismaRole: ProjectRole = "VIEWER" as ProjectRole;
-
-    if (role && typeof role === 'string' && validRoles.includes(role.toUpperCase())) {
-      prismaRole = role.toUpperCase() as ProjectRole;
+    if (normalizedRole === 'PROJECT_MANAGER' || normalizedRole === 'ADMIN' || normalizedRole === 'OWNER') {
+      prismaRole = 'OWNER';
+    } else if (normalizedRole === 'CONTRIBUTOR' || normalizedRole === 'EDITOR') {
+      prismaRole = 'CONTRIBUTOR';
+    } else if (normalizedRole === 'VIEWER') {
+      prismaRole = 'VIEWER';
     } else {
       console.warn(`Invalid role "${role}" provided for invite. Defaulting to VIEWER.`);
     }
