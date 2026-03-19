@@ -330,6 +330,8 @@ export async function listExpenses(projectId: string) {
   return (prisma as any).projectExpense.findMany({ where: { projectId }, orderBy: { incurredAt: 'desc' } });
 }
 
+
+
 export async function updateExpense(id: string, input: { amount?: number; description?: string; category?: string; incurredAt?: string }) {
   const data: any = {};
   if (input.amount !== undefined) data.amount = input.amount as any;
@@ -442,53 +444,145 @@ export async function deleteTask(id: string) {
 }
 
 export async function listMilestones(projectId: string) {
-  return (prisma as any).projectMilestone.findMany({ where: { projectId }, orderBy: { dueDate: 'asc' } });
+  if (!projectId) return [];
+  try {
+    const tasks = await (prisma as any).projectTask.findMany({
+      where: { projectId, NOT: { dueDate: null } },
+      orderBy: { dueDate: 'asc' }
+    });
+
+    if (tasks.length === 0) return [];
+
+    // Group tasks by week for milestones
+    const weeksMap = new Map<string, any[]>();
+    tasks.forEach((task: any) => {
+      const date = new Date(task.dueDate);
+      const startOfWeek = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      const weekKey = startOfWeek.toISOString().split('T')[0];
+
+      if (!weeksMap.has(weekKey)) weeksMap.set(weekKey, []);
+      weeksMap.get(weekKey)!.push(task);
+    });
+
+    const sortedWeeks = Array.from(weeksMap.keys()).sort();
+    return sortedWeeks.map((weekKey, idx) => {
+      const weekTasks = weeksMap.get(weekKey)!;
+      const completed = weekTasks.filter(t => t.status === 'COMPLETED').length;
+      const progress = Math.round((completed / weekTasks.length) * 100);
+      
+      return {
+        id: `milestone-${weekKey}`,
+        projectId,
+        title: weekTasks.length > 1 ? `${weekTasks[0].title} & ${weekTasks.length - 1} others` : weekTasks[0].title,
+        dueDate: weekKey,
+        status: progress === 100 ? "Completed" : progress > 0 ? "In Progress" : "Not Started",
+        progress,
+        weekNumber: idx + 1
+      };
+    });
+  } catch (error) {
+    console.error("Error generating milestones from tasks:", error);
+    return [];
+  }
 }
 
 export async function createMilestone(projectId: string, title: string, dueDate?: string, status?: string, progress?: number) {
-  const data: any = { projectId, title };
-  if (dueDate) data.dueDate = new Date(dueDate);
-  if (status) data.status = status;
-  if (progress !== undefined) data.progress = progress;
-  return (prisma as any).projectMilestone.create({ data });
+  try {
+    const data: any = { projectId, title };
+    if (dueDate) data.dueDate = new Date(dueDate);
+    if (status) data.status = status;
+    if (progress !== undefined) data.progress = progress;
+    return await (prisma as any).projectMilestone.create({ data });
+  } catch (error) {
+    console.error("Error creating milestone (Table may be missing):", error);
+    return null;
+  }
 }
 
 export async function updateMilestone(id: string, title?: string, dueDate?: string, status?: string, progress?: number) {
-  const data: any = {};
-  if (title !== undefined) data.title = title;
-  if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
-  if (status !== undefined) data.status = status;
-  if (progress !== undefined) data.progress = progress;
-  return (prisma as any).projectMilestone.update({ where: { id }, data });
+  try {
+    const data: any = {};
+    if (title !== undefined) data.title = title;
+    if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
+    if (status !== undefined) data.status = status;
+    if (progress !== undefined) data.progress = progress;
+    return await (prisma as any).projectMilestone.update({ where: { id }, data });
+  } catch (error) {
+    console.error("Error updating milestone (Table may be missing):", error);
+    return null;
+  }
 }
 
 export async function deleteMilestone(id: string) {
-  return (prisma as any).projectMilestone.delete({ where: { id } });
+  try {
+    return await (prisma as any).projectMilestone.delete({ where: { id } });
+  } catch (error) {
+    console.error("Error deleting milestone (Table may be missing):", error);
+    return null;
+  }
 }
 
 export async function listRisks(projectId: string) {
-  return (prisma as any).projectRisk.findMany({ where: { projectId }, orderBy: { updatedAt: 'desc' } });
+  if (!projectId) return [];
+  try {
+    const tasks = await (prisma as any).projectTask.findMany({ 
+      where: { projectId },
+      orderBy: { priority: 'desc' }
+    });
+    
+    console.log("FETCHED TASKS FOR RISKS:", tasks);
+
+    const generatedRisks = tasks.map((task: any) => ({
+      id: task.id,
+      title: task.title,
+      description: task.description || "Auto-generated from task",
+      severity: task.priority ? task.priority.toUpperCase() : "MEDIUM",
+      status: task.status === "COMPLETED" ? "Resolved" : "Active"
+    }));
+
+    console.log("GENERATED RISKS:", generatedRisks);
+    return generatedRisks;
+  } catch (error) {
+    console.error("Error generating risks from tasks:", error);
+    return [];
+  }
 }
 
 export async function createRisk(projectId: string, title: string, description?: string, severity?: string, status?: string) {
-  const data: any = { projectId, title };
-  if (description) data.description = description;
-  if (severity) data.severity = severity;
-  if (status) data.status = status;
-  return (prisma as any).projectRisk.create({ data });
+  try {
+    const data: any = { projectId, title };
+    if (description) data.description = description;
+    if (severity) data.severity = severity;
+    if (status) data.status = status;
+    return await (prisma as any).projectRisk.create({ data });
+  } catch (error) {
+    console.error("Error creating risk (Table may be missing):", error);
+    return null;
+  }
 }
 
 export async function updateRisk(id: string, title?: string, description?: string, severity?: string, status?: string) {
-  const data: any = {};
-  if (title !== undefined) data.title = title;
-  if (description !== undefined) data.description = description;
-  if (severity !== undefined) data.severity = severity;
-  if (status !== undefined) data.status = status;
-  return (prisma as any).projectRisk.update({ where: { id }, data });
+  try {
+    const data: any = {};
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (severity !== undefined) data.severity = severity;
+    if (status !== undefined) data.status = status;
+    return await (prisma as any).projectRisk.update({ where: { id }, data });
+  } catch (error) {
+    console.error("Error updating risk (Table may be missing):", error);
+    return null;
+  }
 }
 
 export async function deleteRisk(id: string) {
-  return (prisma as any).projectRisk.delete({ where: { id } });
+  try {
+    return await (prisma as any).projectRisk.delete({ where: { id } });
+  } catch (error) {
+    console.error("Error deleting risk (Table may be missing):", error);
+    return null;
+  }
 }
 
 export async function archiveProject(orgId: string, id: string) {

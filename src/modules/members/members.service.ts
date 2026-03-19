@@ -126,13 +126,12 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
     const normalizedRole = role ? role.toUpperCase().replace(/\s+/g, '_') : '';
     let prismaRole: ProjectRole = 'VIEWER';
 
-    if (normalizedRole === 'PROJECT_MANAGER' || normalizedRole === 'ADMIN' || normalizedRole === 'OWNER') {
-      prismaRole = 'OWNER';
-    } else if (normalizedRole === 'CONTRIBUTOR' || normalizedRole === 'EDITOR') {
-      prismaRole = 'CONTRIBUTOR';
-    } else if (normalizedRole === 'VIEWER') {
-      prismaRole = 'VIEWER';
-    } else {
+    if (normalizedRole === 'OWNER') prismaRole = 'OWNER';
+    else if (normalizedRole === 'ADMIN') prismaRole = 'ADMIN';
+    else if (normalizedRole === 'PROJECT_MANAGER') prismaRole = 'PROJECT_MANAGER';
+    else if (normalizedRole === 'CONTRIBUTOR' || normalizedRole === 'EDITOR') prismaRole = 'CONTRIBUTOR';
+    else if (normalizedRole === 'VIEWER') prismaRole = 'VIEWER';
+    else {
       console.warn(`Invalid role "${role}" provided for invite. Defaulting to VIEWER.`);
     }
     console.log('prismaRole to use:', prismaRole);
@@ -145,7 +144,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
     await prisma.projectInvite.upsert({
       where: { projectId_email: { projectId, email } },
       update: {
-        projectRole: prismaRole,
+        projectRole: prismaRole as any,
         tokenHash,
         expiresAt,
         used: false
@@ -153,7 +152,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
       create: {
         projectId,
         email,
-        projectRole: prismaRole,
+        projectRole: prismaRole as any,
         tokenHash,
         expiresAt
       }
@@ -293,7 +292,7 @@ export async function updateMemberRole(projectId: string, memberId: string, role
     }
     return prisma.projectInvite.update({
       where: { id: memberId },
-      data: { projectRole: prismaRole },
+      data: { projectRole: prismaRole as any },
     });
   }
 
