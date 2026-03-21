@@ -44,16 +44,22 @@ export const AuthController = {
     }
   },
   login: async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = loginSchema.safeParse(request.body);
+    const body = request.body as any;
+    const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten() });
     }
     try {
-      const result = await login(parsed.data);
+      const result = await login({
+        ...parsed.data,
+        projectId: body.projectId,
+        token: body.token
+      });
       setRefreshCookie(reply, result.refreshCookieValue);
       return reply.send({ user: result.user, accessToken: result.accessToken });
     } catch (err: any) {
-      return reply.status(503).send({ error: 'Database unavailable', code: 'DB_UNAVAILABLE' });
+      console.error('Login error:', err);
+      return reply.status(err.status || 401).send({ error: err.message || 'Login failed' });
     }
   },
   logout: async (request: FastifyRequest, reply: FastifyReply) => {

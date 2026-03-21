@@ -23,6 +23,7 @@ export function generateRandomToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
-export function sha256(input: string) {
-  return crypto.createHash('sha256').update(input).digest('hex');
+export function sha256(input: string | null | undefined) {
+  const safeInput = String(input || '');
+  return crypto.createHash('sha256').update(safeInput).digest('hex');
 }

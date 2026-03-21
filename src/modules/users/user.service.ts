@@ -1,5 +1,4 @@
 import { prisma } from '../../prisma/client';
-type UserRole = 'ADMIN' | 'PM' | 'MEMBER';
 
 export async function findByEmail(email: string) {
   return prisma.user.findUnique({ where: { email } });
@@ -14,7 +13,7 @@ export async function createUser(input: {
   name: string;
   passwordHash: string;
   organizationId: string;
-  role?: UserRole;
+  globalRole?: 'ADMIN' | 'TEAM_MEMBER';
 }) {
   return prisma.user.create({
     data: {
@@ -22,7 +21,7 @@ export async function createUser(input: {
       name: input.name,
       passwordHash: input.passwordHash,
       organizationId: input.organizationId,
-      role: input.role ?? 'ADMIN'
+      globalRole: input.globalRole ?? 'ADMIN'
     }
   });
 }

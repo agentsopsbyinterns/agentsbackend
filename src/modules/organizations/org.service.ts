@@ -97,7 +97,7 @@ export async function acceptOrgInvite(rawToken: string) {
   if (user) {
     await prisma.user.update({
       where: { id: user.id },
-      data: { organizationId: invite.organizationId, role: user.role || 'MEMBER' }
+      data: { organizationId: invite.organizationId, globalRole: (user as any).globalRole || 'TEAM_MEMBER' }
     });
   } else {
     user = await prisma.user.create({
@@ -106,7 +106,7 @@ export async function acceptOrgInvite(rawToken: string) {
         name: invite.email.split('@')[0],
         passwordHash: 'invited',
         organizationId: invite.organizationId,
-        role: 'MEMBER'
+        globalRole: 'TEAM_MEMBER'
       }
     });
   }

@@ -64,7 +64,7 @@ function ensureUserForProvider(provider: 'google' | 'facebook', profile: OAuthPr
         name: profile.displayName || email || providerIdValue,
         passwordHash: 'oauth',
         organizationId: organization.id,
-        role: 'ADMIN',
+        globalRole: 'ADMIN',
         [providerIdField]: providerIdValue
       } as any
     });

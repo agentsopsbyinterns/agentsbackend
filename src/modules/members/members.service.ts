@@ -4,6 +4,7 @@ import { ProjectRole } from '@prisma/client';
 import { sendMail } from '../../common/utils/mailer';
 import { env } from '../../config/env';
 import { generateRandomToken, sha256 } from '../../common/utils/tokens';
+import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles';
 
 // Helper to find an existing user by email, or create a new one if they don't exist in the org
 async function findOrCreateUserByEmail(email: string, orgId: string) {
@@ -11,22 +12,26 @@ async function findOrCreateUserByEmail(email: string, orgId: string) {
   if (!orgId) throw new Error('Organization ID is required');
   
   try {
-    let user = await prisma.user.findUnique({ where: { email } });
+    let user = await (prisma as any).user.findUnique({ where: { email } });
     if (!user) {
+      // Check if this is the first user in the organization
+      const orgUsersCount = await (prisma as any).user.count({
+        where: { organizationId: orgId }
+      });
+
       // If user doesn't exist at all, create them and associate with the org
-      user = await prisma.user.create({
+      user = await (prisma as any).user.create({
         data: {
           email,
           name: email.split('@')[0], // Default name from email prefix
           organizationId: orgId,
           passwordHash: 'INVITED_USER', // Added passwordHash for invited users
-          role: 'MEMBER',
-          globalRole: 'TEAM_MEMBER',
+          globalRole: orgUsersCount === 0 ? 'ADMIN' : 'TEAM_MEMBER',
         },
       });
-    } else if (!user.organizationId) {
-      // If user exists but is not part of any org, assign them to this one
-      user = await prisma.user.update({
+    } else if (!user.organizationId || user.organizationId !== orgId) {
+      // If user exists but is not part of the correct org, update them
+      user = await (prisma as any).user.update({
         where: { id: user.id },
         data: { organizationId: orgId },
       });
@@ -40,15 +45,9 @@ async function findOrCreateUserByEmail(email: string, orgId: string) {
 
 // Get all members for a specific project
 export async function getProjectMembers(projectId: string) {
-  console.log('getProjectMembers called with projectId:', projectId);
-  if (!projectId || projectId === 'undefined' || projectId === 'null') {
-    console.error('Invalid projectId in getProjectMembers');
-    return { members: [], invites: [] };
-  }
-  
   try {
     const [members, invites] = await Promise.all([
-      (prisma.projectMember as any).findMany({
+      (prisma as any).projectMember.findMany({
         where: { projectId: projectId },
         include: {
           user: {
@@ -56,44 +55,51 @@ export async function getProjectMembers(projectId: string) {
           },
         },
       }),
-      prisma.projectInvite.findMany({
+      (prisma as any).projectInvite.findMany({
         where: { 
           projectId: projectId,
-          used: false,
+          status: "PENDING",
           expiresAt: { gt: new Date() }
         }
       })
     ]);
+
+    // Map existing member emails to avoid duplicates
+    const memberEmails = new Set(members.map((m: any) => m.user?.email.toLowerCase()).filter(Boolean));
     
-    console.log(`Found ${members.length} members and ${invites.length} invites for project ${projectId}`);
-    return { members, invites };
+    // Format active members
+    const formattedMembers = members.map((m: any) => ({
+      id: m.id,
+      userId: m.userId,
+      name: m.user?.name || m.user?.email.split('@')[0],
+      email: m.user?.email,
+      role: mapLegacyRole(m.projectRole),
+      projectRole: mapLegacyRole(m.projectRole),
+      status: 'active',
+      avatarUrl: m.user?.avatarUrl
+    }));
+
+    // Format pending invites only if the user is NOT already a member
+    const formattedInvites = invites
+      .filter((i: any) => !memberEmails.has(i.email.toLowerCase()))
+      .map((i: any) => ({
+        id: i.id,
+        userId: null,
+        name: i.email.split('@')[0],
+        email: i.email,
+        role: mapLegacyRole(i.projectRole),
+        projectRole: mapLegacyRole(i.projectRole),
+        status: 'invited',
+        avatarUrl: null
+      }));
+
+    const combined = [...formattedMembers, ...formattedInvites];
+    
+    console.log(`[getProjectMembers] Found ${members.length} members and ${invites.length} invites for project ${projectId}`);
+    return { items: combined, total: combined.length };
   } catch (error: any) {
     console.error('Error in getProjectMembers findMany:', error);
-    // If it fails with the weird projectId error, try the relation way
-    try {
-      console.log('Retrying getProjectMembers with relation where clause');
-      const [members, invites] = await Promise.all([
-        (prisma.projectMember as any).findMany({
-          where: { project: { id: projectId } },
-          include: {
-            user: {
-              select: { id: true, name: true, email: true, avatarUrl: true },
-            },
-          },
-        }),
-        prisma.projectInvite.findMany({
-          where: { 
-            project: { id: projectId },
-            used: false,
-            expiresAt: { gt: new Date() }
-          }
-        })
-      ]);
-      return { members, invites };
-    } catch (retryError) {
-      console.error('Retry failed:', retryError);
-      throw error;
-    }
+    throw error;
   }
 }
 
@@ -102,7 +108,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
   console.log('inviteMember called with:', { projectId, orgId, email, role });
   
   // Fetch project name for the email
-  const project = await prisma.project.findUnique({
+  const project = await (prisma as any).project.findUnique({
     where: { id: projectId },
     select: { name: true }
   });
@@ -111,7 +117,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
   console.log('findOrCreateUserByEmail result:', user);
   
   try {
-    const existing = await (prisma.projectMember as any).findFirst({
+    const existing = await (prisma as any).projectMember.findFirst({
       where: {
         userId: user.id,
         projectId: projectId,
@@ -123,36 +129,50 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
       return { message: 'User already in project' };
     }
 
-    const normalizedRole = role ? role.toUpperCase().replace(/\s+/g, '_') : '';
-    let prismaRole: ProjectRole = 'VIEWER';
-
-    if (normalizedRole === 'OWNER') prismaRole = 'OWNER';
-    else if (normalizedRole === 'ADMIN') prismaRole = 'ADMIN';
-    else if (normalizedRole === 'PROJECT_MANAGER') prismaRole = 'PROJECT_MANAGER';
-    else if (normalizedRole === 'CONTRIBUTOR' || normalizedRole === 'EDITOR') prismaRole = 'CONTRIBUTOR';
-    else if (normalizedRole === 'VIEWER') prismaRole = 'VIEWER';
-    else {
-      console.warn(`Invalid role "${role}" provided for invite. Defaulting to VIEWER.`);
-    }
+    const prismaRole = mapLegacyRole(role);
     console.log('prismaRole to use:', prismaRole);
+
+    // Requirement 1: Create ProjectMember immediately
+    const projectMember = await (prisma as any).projectMember.upsert({
+      where: {
+        userId_projectId: {
+          userId: user.id,
+          projectId: projectId
+        }
+      },
+      update: {
+        projectRole: prismaRole
+      },
+      create: {
+        userId: user.id,
+        projectId: projectId,
+        projectRole: prismaRole,
+        joinedAt: new Date()
+      }
+    });
+
+    console.log(`[PROJECT MEMBER CREATED] User: ${user.id}, Project: ${projectId}, Role: ${prismaRole}`);
+
+    // Requirement 10: Log invite creation
+    console.log(`[INVITE CREATION] Project: ${projectId}, Email: ${email}, Role: ${prismaRole}`);
 
     // Create a ProjectInvite record with a token
     const token = generateRandomToken(32);
     const tokenHash = sha256(token);
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
 
-    await prisma.projectInvite.upsert({
+    await (prisma as any).projectInvite.upsert({
       where: { projectId_email: { projectId, email } },
       update: {
-        projectRole: prismaRole as any,
+        projectRole: prismaRole,
         tokenHash,
         expiresAt,
-        used: false
+        status: "PENDING"
       },
       create: {
         projectId,
         email,
-        projectRole: prismaRole as any,
+        projectRole: prismaRole,
         tokenHash,
         expiresAt
       }
@@ -210,9 +230,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
       console.error('Failed to send invite email:', error);
     }
 
-    // We don't create the ProjectMember here anymore, it's created on acceptance
-    // But for now, let's return a status
-    return { message: 'Invitation sent successfully', email };
+    return { message: 'Invitation sent successfully', email, projectRole: prismaRole };
   } catch (dbError: any) {
     console.error('Database error in inviteMember:', dbError);
     throw new Error(`Database error: ${dbError.message}`);
@@ -222,7 +240,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
 // Remove a member from a project
 export async function removeMember(projectId: string, memberId: string) {
   // Try finding in ProjectMember first
-  const member = await (prisma.projectMember as any).findUnique({
+  const member = await (prisma as any).projectMember.findUnique({
     where: { id: memberId },
   });
   
@@ -230,11 +248,11 @@ export async function removeMember(projectId: string, memberId: string) {
     if (member.projectId !== projectId) {
       throw new Error('Project member not found in this project.');
     }
-    return (prisma.projectMember as any).delete({ where: { id: memberId } });
+    return (prisma as any).projectMember.delete({ where: { id: memberId } });
   }
 
   // If not found, try finding in ProjectInvite
-  const invite = await prisma.projectInvite.findUnique({
+  const invite = await (prisma as any).projectInvite.findUnique({
     where: { id: memberId },
   });
 
@@ -242,7 +260,7 @@ export async function removeMember(projectId: string, memberId: string) {
     if (invite.projectId !== projectId) {
       throw new Error('Project invitation not found in this project.');
     }
-    return prisma.projectInvite.delete({ where: { id: memberId } });
+    return (prisma as any).projectInvite.delete({ where: { id: memberId } });
   }
 
   throw new Error('Project member or invitation not found.');
@@ -250,24 +268,10 @@ export async function removeMember(projectId: string, memberId: string) {
 
 // Update a member's role
 export async function updateMemberRole(projectId: string, memberId: string, role: string) {
-  const validRoles = [
-    "OWNER",
-    "ADMIN",
-    "PROJECT_MANAGER",
-    "CONTRIBUTOR",
-    "VIEWER",
-  ];
-
-  let prismaRole: ProjectRole = "VIEWER" as ProjectRole;
-
-  if (role && typeof role === 'string' && validRoles.includes(role.toUpperCase())) {
-    prismaRole = role.toUpperCase() as ProjectRole;
-  } else {
-    console.warn(`Invalid role "${role}" provided for update. Defaulting to VIEWER.`);
-  }
+  const prismaRole = mapLegacyRole(role);
 
   // Try updating ProjectMember first
-  const member = await (prisma.projectMember as any).findUnique({
+  const member = await (prisma as any).projectMember.findUnique({
     where: { id: memberId },
   });
 
@@ -275,14 +279,14 @@ export async function updateMemberRole(projectId: string, memberId: string, role
     if (member.projectId !== projectId) {
       throw new Error('Project member not found in this project.');
     }
-    return (prisma.projectMember as any).update({
+    return (prisma as any).projectMember.update({
       where: { id: memberId },
       data: { projectRole: prismaRole },
     });
   }
 
   // If not found, try updating ProjectInvite
-  const invite = await prisma.projectInvite.findUnique({
+  const invite = await (prisma as any).projectInvite.findUnique({
     where: { id: memberId },
   });
 
@@ -290,9 +294,9 @@ export async function updateMemberRole(projectId: string, memberId: string, role
     if (invite.projectId !== projectId) {
       throw new Error('Project invitation not found in this project.');
     }
-    return prisma.projectInvite.update({
+    return (prisma as any).projectInvite.update({
       where: { id: memberId },
-      data: { projectRole: prismaRole as any },
+      data: { projectRole: prismaRole },
     });
   }
 
@@ -300,51 +304,88 @@ export async function updateMemberRole(projectId: string, memberId: string, role
 }
 
 // Accept a project invitation
-export async function acceptProjectInvite(token: string) {
+export async function acceptProjectInvite(token: string, userId?: string) {
   const tokenHash = sha256(token);
-  const invite = await prisma.projectInvite.findUnique({
+  const invite = await (prisma as any).projectInvite.findUnique({
     where: { tokenHash },
     include: { project: true }
   });
 
-  if (!invite || invite.used || invite.expiresAt < new Date()) {
+  if (!invite || invite.status === "ACCEPTED" || invite.expiresAt < new Date()) {
     throw new Error('Invalid or expired invitation link');
   }
 
   const project = invite.project;
   if (!project) throw new Error('Project not found');
 
-  let user = await prisma.user.findUnique({ where: { email: invite.email } });
+  // Check if user exists by invite email
+  const existingUserByEmail = await (prisma as any).user.findUnique({ where: { email: invite.email } });
 
-  // If user doesn't exist, we don't create them here, we let the frontend handle signup
-  // If user exists, we add them to the project
-  if (user) {
-    await (prisma.projectMember as any).upsert({
-      where: { userId_projectId: { userId: user.id, projectId: invite.projectId } },
-      update: { projectRole: invite.projectRole },
-      create: {
-        userId: user.id,
-        projectId: invite.projectId,
-        projectRole: invite.projectRole
+  // If userId is provided, it means the user is logged in and accepting
+    if (userId) {
+      console.log("[ACCEPT INVITE] user:", userId, "project:", invite.projectId);
+      
+      // Create or update ProjectMember entry for the logged-in user
+      const projectId = invite.projectId;
+      const projectRole = mapLegacyRole(invite.projectRole);
+  
+      await (prisma as any).projectMember.upsert({
+        where: { 
+          userId_projectId: { 
+            userId, 
+            projectId 
+          } 
+        },
+        update: { 
+          projectRole 
+        },
+        create: {
+          userId,
+          projectId,
+          projectRole
+        }
+      });
+  
+      console.log("[PROJECT MEMBER CREATED]", { 
+        userId, 
+        projectId, 
+        projectRole 
+      });
+  
+    // Mark project invite as accepted
+    await (prisma as any).projectInvite.update({
+      where: { id: invite.id },
+      data: { 
+        status: "ACCEPTED"
       }
     });
+  
+    // Requirement 10: Log invite acceptance
+    console.log(`[INVITE ACCEPTANCE] User: ${userId}, Project: ${invite.projectId}, Role: ${projectRole}`);
 
-    // Mark invite as used
-    await prisma.projectInvite.update({
-      where: { id: invite.id },
-      data: { used: true }
+  // Mark organization invite as active in the legacy Invite table
+    const orgInvite = await (prisma as any).invite.findFirst({
+      where: { organizationId: invite.project.organizationId, email: invite.email }
     });
 
-    return { success: true, projectId: invite.projectId, userExists: true };
+    if (orgInvite) {
+      await (prisma as any).invite.update({
+        where: { id: orgInvite.id },
+        data: { status: "active" }
+      });
+    }
+
+    return { success: true, projectId: invite.projectId };
   }
 
-  // If user doesn't exist, we just return the invite details so the frontend can pre-fill signup
+  // If userId is NOT provided, we are just verifying the invite (GET request)
   return { 
     success: true, 
     projectId: invite.projectId, 
-    userExists: false, 
+    userExists: !!existingUserByEmail, 
     email: invite.email,
-    role: invite.projectRole,
+    projectRole: mapLegacyRole(invite.projectRole),
     organizationId: project.organizationId
   };
 }
+

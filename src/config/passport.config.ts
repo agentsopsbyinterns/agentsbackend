@@ -3,6 +3,7 @@ import { Strategy as GoogleStrategy, Profile as GoogleProfile } from 'passport-g
 import { Strategy as FacebookStrategy, Profile as FacebookProfile } from 'passport-facebook';
 import { prisma } from '../prisma/client';
 import { env } from './env';
+import { mapLegacyRole } from '../common/utils/roles';
 
 type OAuthProfile = {
   id: string;
@@ -41,33 +42,105 @@ async function ensureUserForProvider(provider: 'google' | 'facebook', profile: O
   if (email) {
     const existingByEmail = await prisma.user.findUnique({ where: { email } });
     if (existingByEmail) {
-      return prisma.user.update({
+      const updated = await prisma.user.update({
         where: { id: existingByEmail.id },
         data: { [providerIdField]: providerIdValue } as any
       });
+      
+      // Check for pending invites for this existing user
+      await handlePendingInvites(updated);
+      return updated;
     }
   }
 
-  const orgName =
-    (profile.displayName && `${profile.displayName}'s Org`) ||
-    (email && `${email.split('@')[0]}'s Org`) ||
-    `${provider.toUpperCase()} User Org`;
+  // No existing user found, create new one
+  return await prisma.$transaction(async (tx) => {
+    // Determine if this is the first user overall or in a potential organization
+    // For simplicity with OAuth, we usually create a new Org if no invite exists
+    
+    let organizationId: string;
+    let globalRole: 'ADMIN' | 'TEAM_MEMBER' = 'TEAM_MEMBER';
 
-  const organization = await prisma.organization.create({
-    data: { name: orgName }
+    // Check if there's an invite for this email
+    const invite = email ? await tx.projectInvite.findFirst({
+      where: { email, status: 'PENDING', expiresAt: { gt: new Date() } },
+      include: { project: true }
+    }) : null;
+
+    if (invite) {
+      organizationId = invite.project.organizationId;
+      globalRole = 'TEAM_MEMBER';
+    } else {
+      // Create new organization for the first user
+      const orgName =
+        (profile.displayName && `${profile.displayName}'s Org`) ||
+        (email && `${email.split('@')[0]}'s Org`) ||
+        `${provider.toUpperCase()} User Org`;
+
+      const organization = await tx.organization.create({
+        data: { name: orgName }
+      });
+      organizationId = organization.id;
+      globalRole = 'ADMIN'; // First user in new org is ADMIN
+    }
+
+    const created = await tx.user.create({
+      data: {
+        email: email || `${provider}-${providerIdValue}@example.com`,
+        name: profile.displayName || email || providerIdValue,
+        passwordHash: 'oauth',
+        organizationId: organizationId,
+        globalRole: globalRole,
+        [providerIdField]: providerIdValue
+      } as any
+    });
+
+    // If there was an invite, handle it
+    if (invite) {
+      const projectRole = mapLegacyRole(invite.projectRole);
+      await (tx.projectMember as any).upsert({
+        where: { userId_projectId: { userId: created.id, projectId: invite.projectId } },
+        update: { projectRole },
+        create: {
+          userId: created.id,
+          projectId: invite.projectId,
+          projectRole
+        }
+      });
+      await (tx.projectInvite as any).update({
+        where: { id: invite.id },
+        data: { status: 'ACCEPTED' }
+      });
+      console.log('[INVITE MEMBERSHIP CREATED]', created.id, invite.projectId);
+    }
+
+    return created;
+  });
+}
+
+async function handlePendingInvites(user: any) {
+  if (!user.email) return;
+  
+  const invites = await prisma.projectInvite.findMany({
+    where: { email: user.email, status: 'PENDING', expiresAt: { gt: new Date() } }
   });
 
-  const created = await prisma.user.create({
-    data: {
-      email: email || `${provider}-${providerIdValue}@example.com`,
-      name: profile.displayName || email || providerIdValue,
-      passwordHash: 'oauth',
-      organizationId: organization.id,
-      role: 'ADMIN',
-      [providerIdField]: providerIdValue
-    } as any
-  });
-  return created;
+  for (const invite of invites) {
+    const projectRole = mapLegacyRole(invite.projectRole);
+    await (prisma as any).projectMember.upsert({
+      where: { userId_projectId: { userId: user.id, projectId: invite.projectId } },
+      update: { projectRole },
+      create: {
+        userId: user.id,
+        projectId: invite.projectId,
+        projectRole
+      }
+    });
+    await (prisma as any).projectInvite.update({
+      where: { id: invite.id },
+      data: { status: 'ACCEPTED' }
+    });
+  }
 }
 
 export function setupPassport() {
