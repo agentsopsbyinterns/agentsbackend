@@ -6,8 +6,7 @@ declare module 'fastify' {
       id: string;
       email: string;
       organizationId: string;
-      role: 'ADMIN' | 'PM' | 'MEMBER';
-      globalRole?: 'ADMIN' | 'PROJECT_MANAGER' | 'TEAM_MEMBER';
+      globalRole?: 'ADMIN' | 'TEAM_MEMBER';
     };
     organizationId?: string;
   }

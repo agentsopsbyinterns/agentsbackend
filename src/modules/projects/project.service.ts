@@ -1,9 +1,26 @@
 import { prisma } from '../../prisma/client';
+import { generateRandomToken, sha256 } from '../../common/utils/tokens';
+import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles';
 import { mergeProjectData, detectTaskChanges } from '../../services/ai.service';
-import { badRequest, notFound } from '../../common/errors/api-error';
+import { badRequest, notFound, forbidden } from '../../common/errors/api-error';
 
 export async function listProjects(orgId: string, skip: number, take: number, filters?: { search?: string; health?: string; status?: string; client?: string; assignedToMe?: boolean; userId?: string }) {
-  const where: any = { organizationId: orgId, deletedAt: null, AND: [] };
+  const where: any = { 
+    organizationId: orgId, 
+    deletedAt: null, 
+    AND: [] 
+  };
+
+  // Requirement: Only return projects where user is a member
+  if (filters?.userId) {
+    where.AND.push({
+      members: {
+        some: {
+          userId: filters.userId
+        }
+      }
+    });
+  }
 
   if (filters?.search) {
     where.AND.push({
@@ -32,17 +49,13 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
     });
   }
 
-  if (filters?.assignedToMe && filters.userId) {
-    where.AND.push({
-      members: {
-        some: {
-          userId: filters.userId
-        }
-      }
-    });
-  }
-
   if (where.AND.length === 0) delete where.AND;
+
+  const include: any = {
+    _count: {
+      select: { tasks: true }
+    }
+  };
 
   const [items, total] = await Promise.all([
     (prisma as any).project.findMany({ 
@@ -50,16 +63,15 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
       orderBy: { updatedAt: 'desc' }, 
       skip, 
       take,
-      include: {
-        _count: {
-          select: { tasks: true }
-        }
-      }
+      include
     }),
     (prisma as any).project.count({ where })
   ]);
 
-  // Enrich with completed tasks and progress
+  // Requirement 10: Log /my-projects query
+  console.log(`[MY PROJECTS] User: ${filters?.userId}, Found: ${items.length} projects`);
+
+  // Enrich with completed tasks, progress, and user role
    const enrichedItems = await Promise.all(items.map(async (p: any) => {
      const tasksCompleted = await (prisma as any).projectTask.count({
        where: { projectId: p.id, status: 'COMPLETED' }
@@ -67,11 +79,21 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
      const tasksTotal = p._count?.tasks ?? 0;
      const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
      
-     // Return a plain object to ensure all fields are correctly serialized
+     // Extract the user's role from the membership record directly for reliability
+     let userRole = null;
+     if (filters?.userId) {
+       const membership = await (prisma as any).projectMember.findUnique({
+         where: { userId_projectId: { userId: filters.userId, projectId: p.id } }
+       });
+       userRole = membership?.projectRole || null;
+     }
+
      return {
        ...p,
        id: p.id,
+       projectId: p.id, // Included for compatibility with requested example
        name: p.name,
+       projectRole: userRole || 'CONTRIBUTOR',
        client: p.client || p.clientName || '',
        dueDate: p.dueDate,
        status: p.status,
@@ -87,19 +109,45 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
   return { items: enrichedItems, total };
 }
 
-export async function getProject(orgId: string, id: string) {
-  const project = await (prisma as any).project.findFirst({ 
-    where: { id, organizationId: orgId },
+export async function getProject(orgId: string, id: string, userId?: string) {
+  // Requirement: Use ProjectMember as source of truth for reliable access check
+  if (!userId) {
+    // If no userId, fall back to basic lookup (though usually it should have userId)
+    const project = await (prisma as any).project.findFirst({ 
+      where: { id, organizationId: orgId },
+      include: { _count: { select: { tasks: true } } }
+    });
+    if (!project) throw notFound('Project not found');
+    return project; 
+  }
+
+  const membership = await (prisma as any).projectMember.findUnique({
+    where: { userId_projectId: { userId, projectId: id } },
     include: {
-      _count: {
-        select: {
-          tasks: true
+      project: {
+        include: {
+          _count: {
+            select: {
+              tasks: true
+            }
+          }
         }
       }
     }
   });
-  
-  if (!project) return null;
+
+  if (!membership || !membership.project) {
+    console.warn(`[GET PROJECT] No membership found for user ${userId} on project ${id}`);
+    throw notFound('Project not found or you are not a member');
+  }
+
+  const project = membership.project;
+  const userRole = membership.projectRole;
+
+  if (!project.id || !project.name) {
+    console.error(`[GET PROJECT] Project ${id} is missing core fields: id=${project.id}, name=${project.name}`);
+    throw badRequest('Project record is corrupted or incomplete');
+  }
 
   const tasksCompleted = await (prisma as any).projectTask.count({
     where: { projectId: id, status: 'COMPLETED' }
@@ -109,8 +157,11 @@ export async function getProject(orgId: string, id: string) {
   const tasksTotal = project._count?.tasks ?? 0;
   const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
 
-  return {
+  const result = {
     ...project,
+    id: project.id,
+    name: project.name,
+    projectRole: userRole || 'CONTRIBUTOR',
     tasksCompleted,
     tasksTotal,
     progress,
@@ -118,11 +169,26 @@ export async function getProject(orgId: string, id: string) {
     budgetTotal: budgetInfo?.budget ?? 0,
     remainingBudget: budgetInfo?.remaining ?? 0,
   };
+
+  if (!result.id || !result.name || !result.projectRole) {
+    console.error(`[GET PROJECT] Result object missing required fields for project ${id}`);
+    throw badRequest('Failed to construct complete project response');
+  }
+
+  console.log(`[GET PROJECT] Success for ${id}. Role: ${result.projectRole}`);
+  return result;
 }
 
-export async function listTasks(projectId: string) {
+export async function listTasks(projectId: string, userId?: string, projectRole?: string) {
+  const where: any = { projectId };
+  
+  // Requirement 8: If projectRole = CONTRIBUTOR, only return tasks where assignedTo = userId
+  if (projectRole === 'CONTRIBUTOR' && userId) {
+    where.assigneeUserId = userId;
+  }
+
   return (prisma as any).projectTask.findMany({
-    where: { projectId },
+    where,
     include: { meeting: true }
   });
 }
@@ -150,7 +216,7 @@ export async function listProjectMembers(projectId: string) {
       id: m.userId,
       email: m.user.email,
       name: m.user.name,
-      role: m.projectRole,
+      projectRole: m.projectRole,
       status: 'ACTIVE'
     })),
     total: members.length
@@ -325,6 +391,50 @@ export async function detectProjectTaskChanges(projectId: string, newMeetingTask
     return { status: 'success', summary };
 }
 
+export async function listMyProjects(userId: string) {
+  const memberships = await (prisma as any).projectMember.findMany({
+    where: { userId },
+    include: {
+      project: {
+        include: {
+          _count: {
+            select: { tasks: true }
+          }
+        }
+      }
+    }
+  });
+
+  console.log("[MY PROJECTS COUNT]", memberships.length);
+
+  const enrichedItems = await Promise.all(memberships.map(async (m: any) => {
+    const p = m.project;
+    const tasksCompleted = await (prisma as any).projectTask.count({
+      where: { projectId: p.id, status: 'COMPLETED' }
+    });
+    const tasksTotal = p._count?.tasks ?? 0;
+    const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+
+    return {
+      id: p.id,
+      projectId: p.id,
+      name: p.name,
+      projectRole: m.projectRole,
+      client: p.client || p.clientName || '',
+      dueDate: p.dueDate,
+      status: p.status,
+      health: p.health || 'on-track',
+      progress,
+      tasksTotal,
+      tasksCompleted,
+      asanaLink: p.asanaLink,
+      updatedAt: p.updatedAt
+    };
+  }));
+
+  return enrichedItems;
+}
+
 export async function createProject(orgId: string, creatorUserId: string, input: any) {
   const data: any = {
     organizationId: orgId,
@@ -340,7 +450,7 @@ export async function createProject(orgId: string, creatorUserId: string, input:
     createdById: creatorUserId
   };
   const project = await (prisma as any).project.create({ data });
-  await (prisma as any).projectMember.upsert({    where: { userId_projectId: { userId: creatorUserId, projectId: project.id } },    update: { projectRole: 'OWNER' },    create: { userId: creatorUserId, projectId: project.id, projectRole: 'OWNER' }  });
+  await (prisma as any).projectMember.upsert({    where: { userId_projectId: { userId: creatorUserId, projectId: project.id } },    update: { projectRole: 'ADMIN' },    create: { userId: creatorUserId, projectId: project.id, projectRole: 'ADMIN' }  });
   return project;
 }
 
@@ -362,20 +472,46 @@ export async function updateProject(orgId: string, id: string, input: any) {
   });
 }
 
-export async function deleteProject(orgId: string, id: string) {
-  // Soft delete the project itself
-  const project = await (prisma as any).project.update({
-    where: { id, organizationId: orgId },
-    data: { deletedAt: new Date() }
-  });
+export async function deleteProject(orgId: string, id: string, userId?: string) {
+  // 1. RBAC Check: Only allow ADMIN to delete
+  if (userId) {
+    const membership = await (prisma as any).projectMember.findUnique({
+      where: { userId_projectId: { userId, projectId: id } }
+    });
 
-  // Also soft delete all associated meetings
-  await (prisma as any).meeting.updateMany({
-    where: { projectId: id, organizationId: orgId, deletedAt: null },
-    data: { deletedAt: new Date() }
-  });
+    if (!membership || membership.projectRole !== 'ADMIN') {
+      console.warn(`[DELETE PROJECT] Access denied. User ${userId} is not an ADMIN of project ${id}`);
+      throw forbidden('Only project administrators can delete this project');
+    }
+  }
 
-  return project;
+  // 2. Cascade Delete using Transaction
+  console.log(`[DELETE PROJECT] Starting permanent cascade delete for project ${id}`);
+  
+  return await (prisma as any).$transaction(async (tx: any) => {
+    // Delete associated members
+    await tx.projectMember.deleteMany({ where: { projectId: id } });
+    
+    // Delete associated invites
+    await tx.projectInvite.deleteMany({ where: { projectId: id } });
+    
+    // Delete associated tasks
+    await tx.projectTask.deleteMany({ where: { projectId: id } });
+    
+    // Delete associated meetings
+    await tx.meeting.deleteMany({ where: { projectId: id } });
+    
+    // Delete associated expenses
+    await tx.projectExpense.deleteMany({ where: { projectId: id } });
+
+    // Finally delete the project itself
+    const project = await tx.project.delete({
+      where: { id, organizationId: orgId }
+    });
+
+    console.log(`[DELETE PROJECT] Successfully deleted project ${id} and all related records`);
+    return project;
+  });
 }
 
 export async function getBudget(projectId: string) {
@@ -424,7 +560,7 @@ export async function updateExpense(id: string, input: { amount?: number; descri
 export async function deleteExpense(id: string) {
   return (prisma as any).projectExpense.delete({ where: { id } });
 }
-export async function inviteTeamMember(projectId: string, email: string, role: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER') {
+export async function inviteTeamMember(projectId: string, email: string, role: 'ADMIN' | 'PROJECT_MANAGER' | 'CONTRIBUTOR') {
   if (!projectId) throw badRequest("Project ID required");
   if (!email) throw badRequest("Email required");
 
@@ -446,8 +582,8 @@ export async function inviteTeamMember(projectId: string, email: string, role: '
   });
 }
 
-export async function updateProjectMemberRole(projectId: string, memberId: string, role: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER') {
-  const validRoles = ["OWNER", "CONTRIBUTOR", "VIEWER"];
+export async function updateProjectMemberRole(projectId: string, memberId: string, role: 'ADMIN' | 'PROJECT_MANAGER' | 'CONTRIBUTOR') {
+  const validRoles = ["ADMIN", "PROJECT_MANAGER", "CONTRIBUTOR"];
   if (!validRoles.includes(role)) throw badRequest("Invalid role");
 
   return (prisma as any).projectMember.update({
@@ -656,13 +792,45 @@ export async function updateRisk(id: string, title?: string, description?: strin
   }
 }
 
-export async function deleteRisk(id: string) {
-  try {
-    return await (prisma as any).projectRisk.delete({ where: { id } });
-  } catch (error) {
-    console.error("Error deleting risk (Table may be missing):", error);
-    return null;
-  }
+export async function deleteRisk(projectId: string, riskId: string) {
+  return (prisma as any).projectRisk.delete({
+    where: { id: riskId, projectId }
+  });
+}
+
+// API Key Services
+export async function listApiKeys(projectId: string) {
+  return (prisma as any).apiKey.findMany({
+    where: { projectId },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      lastUsed: true
+    }
+  });
+}
+
+export async function createApiKey(projectId: string, userId: string, name: string) {
+  const key = `ao_${generateRandomToken(32)}`;
+  const keyHash = sha256(key);
+  
+  await (prisma as any).apiKey.create({
+    data: {
+      name,
+      keyHash,
+      userId,
+      projectId
+    }
+  });
+
+  return { key }; // Return raw key only once
+}
+
+export async function deleteApiKey(projectId: string, keyId: string) {
+  return (prisma as any).apiKey.delete({
+    where: { id: keyId, projectId }
+  });
 }
 
 export async function archiveProject(orgId: string, id: string) {

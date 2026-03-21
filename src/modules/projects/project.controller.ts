@@ -1,7 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { prisma } from '../../prisma/client';
 import { unauthorized } from '../../common/errors/api-error';
 import { getPagination } from '../../common/utils/pagination';
-import { createProject, deleteProject, getProject, listProjects, listTasks, projectMetrics, updateProject, inviteTeamMember, updateProjectMemberRole, deleteProjectMember, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks, listMilestones, createMilestone, updateMilestone, deleteMilestone, listRisks, createRisk, updateRisk, deleteRisk } from './project.service';
+import { createProject, deleteProject, getProject, listProjects, listMyProjects as listMyProjectsService, listTasks, projectMetrics, updateProject, inviteTeamMember, updateProjectMemberRole, deleteProjectMember, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks, listMilestones, createMilestone, updateMilestone, deleteMilestone, listRisks, createRisk, updateRisk, deleteRisk, listApiKeys, createApiKey, deleteApiKey } from './project.service';
 
 export const ProjectController = {
   mergeMeeting: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -31,6 +32,13 @@ export const ProjectController = {
       userId: request.user.id
     });
     return reply.send({ page, pageSize, total, items });
+  },
+  listMyProjects: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    
+    const result = await listMyProjectsService(request.user.id);
+    
+    return reply.send(result);
   },
   archive: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
@@ -66,7 +74,7 @@ export const ProjectController = {
     const projectId = (request.params as any).id;
     const memberId = (request.params as any).memberId;
     const body = request.body as any;
-    const result = await updateProjectMemberRole(projectId, memberId, body.role);
+    const result = await updateProjectMemberRole(projectId, memberId, body.projectRole || body.role);
     return reply.send(result);
   },
   removeMember: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -80,13 +88,13 @@ export const ProjectController = {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
     const body = request.body as any;
-    const result = await inviteTeamMember(id, body.email, body.role);
+    const result = await inviteTeamMember(id, body.email, body.projectRole || body.role);
     return reply.send(result);
   },
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
-    const p = await getProject(request.user.organizationId, id);
+    const p = await getProject(request.user.organizationId, id, request.user.id);
     return reply.send(p);
   },
   create: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -113,8 +121,17 @@ export const ProjectController = {
     return reply.send({ success: true });
   },
   tasks: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
-    const t = await listTasks(id);
+    
+    // Get the user's role in this project for filtering
+    const userId = request.user.id;
+    const membership = await (prisma as any).projectMember.findUnique({
+      where: { userId_projectId: { userId, projectId: id } }
+    });
+    
+    // Requirement 8: Role-based task filtering
+    const t = await listTasks(id, userId, membership?.projectRole);
     return reply.send(t);
   },
   metrics: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -285,11 +302,34 @@ export const ProjectController = {
   },
   deleteRisk: async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const id = (request.params as any).riskId;
-      await deleteRisk(id);
+      const projectId = (request.params as any).id;
+      const riskId = (request.params as any).riskId;
+      await deleteRisk(projectId, riskId);
       return reply.send({ success: true });
     } catch (error: any) {
       return reply.status(500).send({ error: 'Internal Server Error', message: error.message });
     }
+  },
+  listApiKeys: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const keys = await listApiKeys(id);
+    return reply.send(keys);
+  },
+  createApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const body = request.body as any;
+    if (!body.name) return reply.status(400).send({ message: 'API key name is required' });
+    const { key } = await createApiKey(id, request.user.id, body.name);
+    return reply.code(201).send({ key });
+  },
+  deleteApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const keyId = (request.params as any).keyId;
+    if (!keyId) return reply.status(400).send({ message: 'Key ID is required' });
+    await deleteApiKey(id, keyId);
+    return reply.send({ success: true });
   }
 };

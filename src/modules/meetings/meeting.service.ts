@@ -13,7 +13,7 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput, cr
   
   const attendeeEmails = input.attendees || [];
   
-  const meeting = await (prisma as any).meeting.create({
+  const meeting = await prisma.meeting.create({
     data: {
       organizationId: orgId,
       title: input.title,
@@ -82,7 +82,7 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput, cr
     };
     const ev = await createEvent(orgId, 'primary', payload);
     const hangout = (ev as any)?.hangoutLink || (ev as any)?.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video')?.uri || (ev as any)?.htmlLink || null;
-    const updated = await (prisma as any).meeting.update({
+    const updated = await prisma.meeting.update({
       where: { id: meeting.id },
       data: { meetingLink: hangout || meeting.meetingLink }
     });

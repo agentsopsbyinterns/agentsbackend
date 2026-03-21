@@ -101,7 +101,7 @@ export async function buildApp() {
         id: raw.user.id,
         email: raw.user.email,
         organizationId: raw.user.organizationId,
-        role: raw.user.role
+        globalRole: raw.user.globalRole || 'TEAM_MEMBER'
       };
       req.organizationId = raw.user.organizationId;
     }
@@ -153,6 +153,35 @@ export async function buildApp() {
       success: true,
       message: 'Backend connected successfully ✅',
       userMessage: body?.message || null
+    });
+  });
+
+  // Debug API to inspect ProjectMember records
+  app.get('/debug/project-members', async (request, reply) => {
+    const { prisma } = await import('./prisma/client');
+    const members = await (prisma as any).projectMember.findMany({
+      include: {
+        user: { select: { email: true, name: true } },
+        project: { select: { name: true } }
+      }
+    });
+    return reply.send(members);
+  });
+
+  // Cleanup API to fix invalid ProjectMember roles
+  app.post('/debug/cleanup-project-roles', async (request, reply) => {
+    const { prisma } = await import('./prisma/client');
+    
+    // Using raw SQL for safety when enum values might be corrupted/empty
+    const result = await (prisma as any).$executeRawUnsafe(`
+      UPDATE ProjectMember 
+      SET projectRole = 'CONTRIBUTOR' 
+      WHERE projectRole = '' OR projectRole IS NULL
+    `);
+    
+    return reply.send({ 
+      success: true, 
+      message: `Updated ${result} records with invalid roles to 'CONTRIBUTOR'.` 
     });
   });
 

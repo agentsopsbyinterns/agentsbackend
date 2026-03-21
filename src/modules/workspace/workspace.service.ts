@@ -9,6 +9,6 @@ export async function listUserWorkspace(userId: string) {
     id: m.project.id,
     name: m.project.name,
     clientName: m.project.clientName ?? m.project.client ?? null,
-    role: m.projectRole
+    projectRole: m.projectRole
   }));
 }
