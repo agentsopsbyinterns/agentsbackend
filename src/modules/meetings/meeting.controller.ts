@@ -153,11 +153,17 @@ export const MeetingController = {
 
     const raw = parsed.data.transcript;
     const cleaned = cleanTranscript(raw);
-    const extraction = await extractMeetingData(cleaned, previousSummaries);
-
-    console.log("===== EXTRACTION DEBUG =====");
-    console.log("Full Extraction:", JSON.stringify(extraction, null, 2));
-    console.log("============================");
+    
+    let extraction: any = {};
+    try {
+      extraction = await extractMeetingData(cleaned, previousSummaries);
+      console.log("===== EXTRACTION DEBUG =====");
+      console.log("Full Extraction:", JSON.stringify(extraction, null, 2));
+      console.log("============================");
+    } catch (err) {
+      console.error("[manualTranscript] Extraction failed:", err);
+      // Continue with empty extraction to ensure transcript is saved
+    }
 
     const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
     
@@ -167,62 +173,79 @@ export const MeetingController = {
     const tech_stack = extraction.technical_stack || {};
     const insights = extraction.project_insights || {};
 
-    await (prisma as any).meeting.update({ 
-      where: { id }, 
-      data: { 
-        rawTranscript: raw, 
-        extractionJson: {
-          client_information: {
-            client_name: client_info.client_name || 'Not mentioned',
-            primary_contact: client_info.primary_contact || 'Not mentioned',
-            contact_email: client_info.contact_email || (emailMatch ? emailMatch[0] : 'Not mentioned')
-          },
-          project_summary: {
-            project_name: 'Not mentioned',
-            project_goal: Array.isArray(extraction.project_goals) && extraction.project_goals.length ? extraction.project_goals.join('\n') : 'Not mentioned',
-            project_description: extraction.project_summary || 'Not mentioned'
-          },
-          timeline: {
-            overall_timeline: timeline.overall_timeline || 'Not mentioned',
-            milestones: Array.isArray(extraction.milestones) ? extraction.milestones : []
-          },
-          budget: extraction.budget || 'Not mentioned',
-          technical_stack: {
-            backend: Array.isArray(tech_stack.backend) ? tech_stack.backend : [],
-            frontend: Array.isArray(tech_stack.frontend) ? tech_stack.frontend : [],
-            mobile: Array.isArray(tech_stack.mobile) ? tech_stack.mobile : [],
-            database: Array.isArray(tech_stack.database) ? tech_stack.database : [],
-            caching: Array.isArray(tech_stack.caching) ? tech_stack.caching : [],
-            analytics: Array.isArray(tech_stack.analytics) ? tech_stack.analytics : [],
-            infrastructure: Array.isArray(tech_stack.infrastructure) ? tech_stack.infrastructure : [],
-            containers: Array.isArray(tech_stack.containers) ? tech_stack.containers : [],
-            cloud_providers: Array.isArray(tech_stack.cloud_providers) ? tech_stack.cloud_providers : [],
-            languages: Array.isArray(tech_stack.languages) ? tech_stack.languages : []
-          },
-          deliverables: Array.isArray(extraction.deliverables) ? extraction.deliverables : [],
-          tasks: (Array.isArray(extraction.milestones) ? extraction.milestones : []).map((m: any) => ({
-            title: String(m?.task || '').trim() || 'Not mentioned',
-            assignee: String(m?.owner || '').trim() || 'Not mentioned',
-            deadline: String(m?.deadline || '').trim() || 'Not mentioned'
-          })),
-          team_roles: (Array.isArray(extraction.suggested_team) ? extraction.suggested_team : []).map((m: any) =>
-            typeof m === 'string'
-              ? ({ name: String(m).trim() || 'Not mentioned', role: 'Not mentioned' })
-              : ({ name: String(m?.name || m?.member || '').trim() || 'Not mentioned', role: String(m?.role || '').trim() || 'Not mentioned' })
-          ),
-          risks: Array.isArray(extraction.risks) ? extraction.risks : [],
-          missing_information: Array.isArray(extraction.missing_information) ? extraction.missing_information : [],
-          project_insights: {
-            key_decisions: Array.isArray(insights.key_decisions) ? insights.key_decisions : [],
-            completed_tasks: Array.isArray(insights.completed_tasks) ? insights.completed_tasks : [],
-            pending_blockers: Array.isArray(insights.pending_blockers) ? insights.pending_blockers : [],
-            next_actions: Array.isArray(insights.next_actions) ? insights.next_actions : []
-          }
-        }, 
-        transcriptStatus: 'completed' 
-      } 
-    });
-    return reply.send(extraction);
+    try {
+      // Prisma JSON fields in MySQL are handled as objects by the client.
+      // We build the object structure here. 
+      const extractionData = {
+        client_information: {
+          client_name: client_info.client_name || 'Not mentioned',
+          primary_contact: client_info.primary_contact || 'Not mentioned',
+          contact_email: client_info.contact_email || (emailMatch ? emailMatch[0] : 'Not mentioned')
+        },
+        project_summary: {
+          project_name: extraction.project_name || 'Not mentioned',
+          project_goal: Array.isArray(extraction.project_goals) && extraction.project_goals.length ? extraction.project_goals.join('\n') : 'Not mentioned',
+          project_description: extraction.project_summary || 'Not mentioned'
+        },
+        timeline: {
+          overall_timeline: timeline.overall_timeline || 'Not mentioned',
+          milestones: Array.isArray(extraction.milestones) ? extraction.milestones : []
+        },
+        budget: extraction.budget || 'Not mentioned',
+        technical_stack: {
+          backend: Array.isArray(tech_stack.backend) ? tech_stack.backend : [],
+          frontend: Array.isArray(tech_stack.frontend) ? tech_stack.frontend : [],
+          mobile: Array.isArray(tech_stack.mobile) ? tech_stack.mobile : [],
+          database: Array.isArray(tech_stack.database) ? tech_stack.database : [],
+          caching: Array.isArray(tech_stack.caching) ? tech_stack.caching : [],
+          analytics: Array.isArray(tech_stack.analytics) ? tech_stack.analytics : [],
+          infrastructure: Array.isArray(tech_stack.infrastructure) ? tech_stack.infrastructure : [],
+          containers: Array.isArray(tech_stack.containers) ? tech_stack.containers : [],
+          cloud_providers: Array.isArray(tech_stack.cloud_providers) ? tech_stack.cloud_providers : [],
+          languages: Array.isArray(tech_stack.languages) ? tech_stack.languages : []
+        },
+        deliverables: Array.isArray(extraction.deliverables) ? extraction.deliverables : [],
+        tasks: (Array.isArray(extraction.milestones) ? extraction.milestones : []).map((m: any) => ({
+          title: String(m?.task || '').trim() || 'Not mentioned',
+          assignee: String(m?.owner || '').trim() || 'Not mentioned',
+          deadline: String(m?.deadline || '').trim() || 'Not mentioned'
+        })),
+        team_roles: (Array.isArray(extraction.suggested_team) ? extraction.suggested_team : []).map((m: any) =>
+          typeof m === 'string'
+            ? ({ name: String(m).trim() || 'Not mentioned', role: 'Not mentioned' })
+            : ({ name: String(m?.name || m?.member || '').trim() || 'Not mentioned', role: String(m?.role || '').trim() || 'Not mentioned' })
+        ),
+        risks: Array.isArray(extraction.risks) ? extraction.risks : [],
+        missing_information: Array.isArray(extraction.missing_information) ? extraction.missing_information : [],
+        project_insights: {
+          key_decisions: Array.isArray(insights.key_decisions) ? insights.key_decisions : [],
+          completed_tasks: Array.isArray(insights.completed_tasks) ? insights.completed_tasks : [],
+          pending_blockers: Array.isArray(insights.pending_blockers) ? insights.pending_blockers : [],
+          next_actions: Array.isArray(insights.next_actions) ? insights.next_actions : []
+        }
+      };
+
+      await (prisma as any).meeting.update({ 
+        where: { id }, 
+        data: { 
+          rawTranscript: raw, 
+          extractionJson: extractionData, 
+          transcriptStatus: 'completed' 
+        } 
+      });
+      return reply.send({ success: true, extraction: extractionData });
+    } catch (err: any) {
+      console.error("[manualTranscript] DB update failed:", err);
+      // Fallback: Save just the raw transcript if extraction storage fails
+      await (prisma as any).meeting.update({
+        where: { id },
+        data: { 
+          rawTranscript: raw,
+          transcriptStatus: 'completed'
+        }
+      });
+      return reply.send({ success: true, error: "Extraction failed to save but transcript was stored." });
+    }
   },
   uploadRecording: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();

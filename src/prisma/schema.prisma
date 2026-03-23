@@ -101,7 +101,7 @@ model Meeting {
   updatedAt        DateTime            @updatedAt
   deletedAt        DateTime?
   projectId        String?
-  extractionJson   String?             @db.LongText
+  extractionJson   Json?
   rawTranscript    String?             @db.LongText
   actionItems      ActionItem[]
   attendees        Attendee[]
