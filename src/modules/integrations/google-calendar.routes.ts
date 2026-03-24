@@ -28,7 +28,7 @@ export async function googleCalendarRoutes(app: FastifyInstance) {
         // ensure email persisted
       }
     } catch {}
-    const redirect = `${env.APP_URL}/settings/integrations?google=connected`;
+    const redirect = `${env.APP_URL}/dashboard?google=connected`;
     return reply.redirect(redirect);
   });
 

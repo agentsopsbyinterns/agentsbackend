@@ -76,8 +76,11 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
      const tasksCompleted = await (prisma as any).projectTask.count({
        where: { projectId: p.id, status: 'COMPLETED' }
      });
+     const tasksInProgress = await (prisma as any).projectTask.count({
+        where: { projectId: p.id, status: 'IN_PROGRESS' }
+        });
      const tasksTotal = p._count?.tasks ?? 0;
-     const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+     const progress = tasksTotal > 0 ? Math.round(((tasksCompleted + (tasksInProgress * 0.5)) / tasksTotal) * 100) : 0;
      
      // Extract the user's role from the membership record directly for reliability
      let userRole = null;
@@ -152,10 +155,13 @@ export async function getProject(orgId: string, id: string, userId?: string) {
   const tasksCompleted = await (prisma as any).projectTask.count({
     where: { projectId: id, status: 'COMPLETED' }
   });
+  const tasksInProgress = await (prisma as any).projectTask.count({
+    where: { projectId: id, status: 'IN_PROGRESS' }
+    });
 
   const budgetInfo = await getBudget(id);
   const tasksTotal = project._count?.tasks ?? 0;
-  const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+  const progress = tasksTotal > 0 ? Math.round(((tasksCompleted + (tasksInProgress * 0.5)) / tasksTotal) * 100) : 0;
 
   const result = {
     ...project,
