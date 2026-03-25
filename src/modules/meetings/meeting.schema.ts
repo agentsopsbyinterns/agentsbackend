@@ -10,7 +10,8 @@ export const createMeetingSchema = z.object({
 });
 
 export const rescheduleSchema = z.object({
-  scheduledTime: z.string().transform((v) => new Date(v))
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format (HH:MM)")
 });
 
 export const reviewSchema = z.object({

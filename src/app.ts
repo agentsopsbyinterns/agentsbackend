@@ -15,6 +15,7 @@ import { googleCalendarRoutes } from './modules/integrations/google-calendar.rou
 import { webhookRoutes } from './modules/webhooks/webhook.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
 import { taskRoutes } from './modules/tasks/tasks.routes';
+import { searchRoutes } from './modules/search/search.routes';
 import usersRoutes from './modules/users/users.routes';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { idempotencyMiddleware } from './common/middleware/idempotency.middleware';
@@ -120,6 +121,7 @@ export async function buildApp() {
   await app.register(webhookRoutes);
   await app.register(dashboardRoutes);
   await app.register(taskRoutes);
+  await app.register(searchRoutes);
   await app.register(usersRoutes);
   const { workspaceRoutes } = await import('./modules/workspace/workspace.routes.js');
   await app.register(workspaceRoutes);

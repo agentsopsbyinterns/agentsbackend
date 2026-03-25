@@ -86,10 +86,26 @@ export const MeetingController = {
   reschedule: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
+    
+    const existing = await getMeeting(request.user.organizationId, id);
+    if (!existing) {
+      return reply.status(404).send({ error: 'Meeting not found' });
+    }
+
     const parsed = rescheduleSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
-    const m = await rescheduleMeeting(request.user.organizationId, id, parsed.data);
-    return reply.send(m);
+    if (!parsed.success) {
+      return reply.status(400).send({ 
+        error: 'Validation failed', 
+        details: parsed.error.format() 
+      });
+    }
+
+    try {
+      const m = await rescheduleMeeting(request.user.organizationId, id, parsed.data);
+      return reply.send(m);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message || 'Reschedule failed' });
+    }
   },
   inviteBot: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
