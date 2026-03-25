@@ -127,8 +127,22 @@ export async function getMeeting(orgId: string, id: string) {
 }
 
 export async function rescheduleMeeting(orgId: string, id: string, input: RescheduleInput) {
-  const meeting = await (prisma as any).meeting.update({ where: { id }, data: { scheduledTime: input.scheduledTime } });
-  await audit(orgId, 'meeting.reschedule', undefined, { meetingId: id });
+  const { date, time } = input;
+  const scheduledTime = new Date(`${date}T${time}:00`);
+  
+  if (isNaN(scheduledTime.getTime())) {
+    throw new Error('Invalid date or time');
+  }
+
+  const meeting = await (prisma as any).meeting.update({ 
+    where: { id }, 
+    data: { 
+      scheduledTime,
+      updatedAt: new Date()
+    } 
+  });
+  
+  await audit(orgId, 'meeting.reschedule', undefined, { meetingId: id, newTime: scheduledTime });
   return meeting;
 }
 
