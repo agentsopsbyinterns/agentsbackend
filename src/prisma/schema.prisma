@@ -230,6 +230,7 @@ enum InviteStatus {
   ACCEPTED
   EXPIRED
   INVITED
+  ACTIVE
 }
 
 model ProjectInvite {

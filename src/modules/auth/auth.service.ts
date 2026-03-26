@@ -1,5 +1,5 @@
 import { prisma } from '../../prisma/client';
-import type { Prisma } from '@prisma/client';
+import { InviteStatus, type Prisma } from '@prisma/client';
 import { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema';
 import { hashPassword, verifyPassword } from '../../common/utils/password';
 import { generateRandomToken, sha256, signAccessToken } from '../../common/utils/tokens';
@@ -28,7 +28,7 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
       if (input.token && input.projectId) {
         const tokenHash = sha256(input.token);
         const invite = await (prisma as any).projectInvite.findUnique({ where: { tokenHash } });
-        if (invite && invite.status === "PENDING" && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
+        if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
            const projectRole = mapLegacyRole(invite.projectRole);
            console.log(`[signup/placeholder] Adding existing user ${updated.id} to project ${input.projectId} with role ${projectRole}`);
            const pm = await (prisma as any).projectMember.upsert({
@@ -44,7 +44,7 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
            await (prisma as any).projectInvite.update({ 
              where: { id: invite.id }, 
              data: { 
-               status: "ACCEPTED"
+               status: InviteStatus.ACCEPTED
              } 
            });
         }
@@ -96,7 +96,7 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
     if (input.token && input.projectId) {
       const tokenHash = sha256(input.token);
       const invite = await (tx.projectInvite as any).findUnique({ where: { tokenHash } });
-      if (invite && invite.status === "PENDING" && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
+      if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
          const projectRole = mapLegacyRole(invite.projectRole);
          console.log(`[signup/new] Adding new user ${user.id} to project ${input.projectId} with role ${projectRole}`);
          const pm = await (tx.projectMember as any).upsert({
@@ -112,7 +112,7 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
          await (tx.projectInvite as any).update({ 
            where: { id: invite.id }, 
            data: { 
-             status: "ACCEPTED"
+             status: InviteStatus.ACCEPTED
            } 
          });
       }
@@ -148,11 +148,10 @@ export async function login(input: LoginInput & { projectId?: string; token?: st
   const ok = await verifyPassword(user.passwordHash, input.password);
   if (!ok) throw unauthorized('Invalid credentials');
 
-  // If we have a project token, add them to the project now
   if (input.token && input.projectId) {
     const tokenHash = sha256(input.token);
     const invite = await (prisma as any).projectInvite.findUnique({ where: { tokenHash } });
-    if (invite && invite.status === "PENDING" && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
+    if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
        const projectRole = mapLegacyRole(invite.projectRole);
        console.log(`[login/invite] Adding user ${user.id} to project ${input.projectId} with role ${projectRole}`);
        await (prisma as any).projectMember.upsert({
@@ -168,7 +167,7 @@ export async function login(input: LoginInput & { projectId?: string; token?: st
        await (prisma as any).projectInvite.update({ 
          where: { id: invite.id }, 
          data: { 
-           status: "ACCEPTED"
+           status: InviteStatus.ACCEPTED
          } 
        });
 
@@ -179,7 +178,7 @@ export async function login(input: LoginInput & { projectId?: string; token?: st
        if (orgInvite) {
          await prisma.invite.update({
            where: { id: orgInvite.id },
-           data: { status: "active" }
+           data: { status: InviteStatus.ACTIVE }
          });
        }
     }
