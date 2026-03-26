@@ -167,14 +167,15 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
         projectRole: prismaRole,
         tokenHash,
         expiresAt,
-        status: "PENDING"
+        status: "INVITED"
       },
       create: {
         projectId,
         email,
         projectRole: prismaRole,
         tokenHash,
-        expiresAt
+        expiresAt,
+        status: "INVITED"
       }
     });
 

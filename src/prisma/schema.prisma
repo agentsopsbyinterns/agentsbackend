@@ -76,12 +76,12 @@ model Invite {
   id             String       @id @default(cuid())
   organizationId String
   email          String
-  status         String       @default("pending")
+  status         InviteStatus @default(PENDING)
   createdAt      DateTime     @default(now())
   projectId      String?
   projectRole    ProjectRole  @default(CONTRIBUTOR)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  Project        Project?     @relation(fields: [projectId], references: [id])
+  Project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, email])
   @@index([projectId], map: "Invite_projectId_fkey")
@@ -106,7 +106,7 @@ model Meeting {
   actionItems      ActionItem[]
   attendees        Attendee[]
   organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project          Project?            @relation(fields: [projectId], references: [id])
+  project          Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks            ProjectTask[]
   transcript       TranscriptSegment[]
 
@@ -229,6 +229,7 @@ enum InviteStatus {
   PENDING
   ACCEPTED
   EXPIRED
+  INVITED
 }
 
 model ProjectInvite {
