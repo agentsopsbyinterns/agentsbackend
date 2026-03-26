@@ -16,7 +16,8 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
     where.AND.push({
       members: {
         some: {
-          userId: filters.userId
+          userId: filters.userId,
+          status: "ACTIVE"
         }
       }
     });
@@ -139,9 +140,9 @@ export async function getProject(orgId: string, id: string, userId?: string) {
     }
   });
 
-  if (!membership || !membership.project) {
-    console.warn(`[GET PROJECT] No membership found for user ${userId} on project ${id}`);
-    throw notFound('Project not found or you are not a member');
+  if (!membership || !membership.project || membership.status !== 'ACTIVE') {
+    console.warn(`[GET PROJECT] No active membership found for user ${userId} on project ${id}`);
+    throw notFound('Project not found or you are not an active member');
   }
 
   const project = membership.project;
@@ -188,11 +189,6 @@ export async function getProject(orgId: string, id: string, userId?: string) {
 export async function listTasks(projectId: string, userId?: string, projectRole?: string) {
   const where: any = { projectId };
   
-  // Requirement 8: If projectRole = CONTRIBUTOR, only return tasks where assignedTo = userId
-  if (projectRole === 'CONTRIBUTOR' && userId) {
-    where.assigneeUserId = userId;
-  }
-
   return (prisma as any).projectTask.findMany({
     where,
     include: { meeting: true }
@@ -399,7 +395,7 @@ export async function detectProjectTaskChanges(projectId: string, newMeetingTask
 
 export async function listMyProjects(userId: string) {
   const memberships = await (prisma as any).projectMember.findMany({
-    where: { userId },
+    where: { userId, status: "ACTIVE" },
     include: {
       project: {
         include: {
@@ -491,33 +487,31 @@ export async function deleteProject(orgId: string, id: string, userId?: string) 
     }
   }
 
-  // 2. Cascade Delete using Transaction
-  console.log(`[DELETE PROJECT] Starting permanent cascade delete for project ${id}`);
+  // 2. Cascade Delete sequentially (removed transaction to prevent timeout)
+  console.log(`[DELETE PROJECT] Starting permanent sequential delete for project ${id}`);
   
-  return await (prisma as any).$transaction(async (tx: any) => {
-    // Delete associated members
-    await tx.projectMember.deleteMany({ where: { projectId: id } });
-    
-    // Delete associated invites
-    await tx.projectInvite.deleteMany({ where: { projectId: id } });
-    
-    // Delete associated tasks
-    await tx.projectTask.deleteMany({ where: { projectId: id } });
-    
-    // Delete associated meetings
-    await tx.meeting.deleteMany({ where: { projectId: id } });
-    
-    // Delete associated expenses
-    await tx.projectExpense.deleteMany({ where: { projectId: id } });
+  // Delete associated members
+  await (prisma as any).projectMember.deleteMany({ where: { projectId: id } });
+  
+  // Delete associated invites
+  await (prisma as any).projectInvite.deleteMany({ where: { projectId: id } });
+  
+  // Delete associated tasks
+  await (prisma as any).projectTask.deleteMany({ where: { projectId: id } });
+  
+  // Delete associated meetings
+  await (prisma as any).meeting.deleteMany({ where: { projectId: id } });
+  
+  // Delete associated expenses
+  await (prisma as any).projectExpense.deleteMany({ where: { projectId: id } });
 
-    // Finally delete the project itself
-    const project = await tx.project.delete({
-      where: { id, organizationId: orgId }
-    });
-
-    console.log(`[DELETE PROJECT] Successfully deleted project ${id} and all related records`);
-    return project;
+  // Finally delete the project itself
+  const project = await (prisma as any).project.delete({
+    where: { id, organizationId: orgId }
   });
+
+  console.log(`[DELETE PROJECT] Successfully deleted project ${id} and all related records`);
+  return project;
 }
 
 export async function getBudget(projectId: string) {
