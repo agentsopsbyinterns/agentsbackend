@@ -100,9 +100,24 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput, cr
   }
 }
 
-export async function listMeetings(orgId: string, skip: number, take: number, projectId?: string | null) {
+export async function listMeetings(orgId: string, skip: number, take: number, projectId?: string | null, status?: string | null, startDate?: string | null, endDate?: string | null, search?: string | null) {
   const where: Record<string, any> = { organizationId: orgId, deletedAt: null };
   if (projectId) where.projectId = projectId;
+  if (status && status !== 'all') where.status = status;
+  
+  if (startDate || endDate) {
+    where.scheduledTime = {};
+    if (startDate) where.scheduledTime.gte = new Date(startDate);
+    if (endDate) where.scheduledTime.lte = new Date(endDate);
+  }
+
+  if (search) {
+    where.OR = [
+      { title: { contains: search } },
+      { agenda: { contains: search } }
+    ];
+  }
+
   const [items, total] = await Promise.all([
     (prisma as any).meeting.findMany({
       where,

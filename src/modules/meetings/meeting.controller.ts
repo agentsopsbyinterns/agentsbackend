@@ -64,7 +64,12 @@ export const MeetingController = {
     const q = request.query as any;
     const { skip, take, page, pageSize } = getPagination(q);
     const projectId = typeof q?.projectId === 'string' && q.projectId.trim() ? q.projectId : undefined;
-    const { items, total } = await listMeetings(request.user.organizationId, skip, take, projectId);
+    const status = typeof q?.status === 'string' && q.status.trim() ? q.status : undefined;
+    const startDate = typeof q?.startDate === 'string' && q.startDate.trim() ? q.startDate : undefined;
+    const endDate = typeof q?.endDate === 'string' && q.endDate.trim() ? q.endDate : undefined;
+    const search = typeof q?.search === 'string' && q.search.trim() ? q.search : undefined;
+    
+    const { items, total } = await listMeetings(request.user.organizationId, skip, take, projectId, status, startDate, endDate, search);
     return reply.send({ page, pageSize, total, items });
   },
   get: async (request: FastifyRequest, reply: FastifyReply) => {
