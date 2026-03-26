@@ -1,6 +1,6 @@
 
 import { prisma } from '../../prisma/client';
-import { ProjectRole } from '@prisma/client';
+import { ProjectRole, InviteStatus } from '@prisma/client';
 import { sendMail } from '../../common/utils/mailer';
 import { env } from '../../config/env';
 import { generateRandomToken, sha256 } from '../../common/utils/tokens';
@@ -58,7 +58,7 @@ export async function getProjectMembers(projectId: string) {
       (prisma as any).projectInvite.findMany({
         where: { 
           projectId: projectId,
-          status: "PENDING",
+          status: InviteStatus.PENDING,
           expiresAt: { gt: new Date() }
         }
       })
@@ -167,7 +167,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
         projectRole: prismaRole,
         tokenHash,
         expiresAt,
-        status: "INVITED"
+        status: InviteStatus.INVITED
       },
       create: {
         projectId,
@@ -175,7 +175,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
         projectRole: prismaRole,
         tokenHash,
         expiresAt,
-        status: "INVITED"
+        status: InviteStatus.INVITED
       }
     });
 
@@ -312,7 +312,7 @@ export async function acceptProjectInvite(token: string, userId?: string) {
     include: { project: true }
   });
 
-  if (!invite || invite.status === "ACCEPTED" || invite.expiresAt < new Date()) {
+  if (!invite || invite.status === InviteStatus.ACCEPTED || invite.expiresAt < new Date()) {
     throw new Error('Invalid or expired invitation link');
   }
 
@@ -368,11 +368,10 @@ export async function acceptProjectInvite(token: string, userId?: string) {
     const orgInvite = await (prisma as any).invite.findFirst({
       where: { organizationId: invite.project.organizationId, email: invite.email }
     });
-
     if (orgInvite) {
       await (prisma as any).invite.update({
         where: { id: orgInvite.id },
-        data: { status: "active" }
+        data: { status: InviteStatus.ACTIVE }
       });
     }
 

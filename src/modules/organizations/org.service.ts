@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma/client';
+import { InviteStatus } from '@prisma/client';
 import { CreateOrgInput, InviteInput } from './org.schema';
 import { audit } from '../../common/utils/audit';
 import crypto from 'crypto';
@@ -46,8 +47,8 @@ export async function createOrganization(userId: string, input: CreateOrgInput) 
 export async function createInvite(orgId: string, input: InviteInput & { inviterName: string }) {
   const invite = await prisma.invite.upsert({
     where: { organizationId_email: { organizationId: orgId, email: input.email } },
-    update: { status: 'pending' },
-    create: { organizationId: orgId, email: input.email }
+    update: { status: InviteStatus.PENDING },
+    create: { organizationId: orgId, email: input.email, status: InviteStatus.PENDING }
   });
   await audit(orgId, 'invite.create', undefined, { email: input.email });
   const org = await prisma.organization.findUnique({ where: { id: orgId } });
@@ -86,7 +87,7 @@ export async function acceptOrgInvite(rawToken: string) {
   const invite = await prisma.invite.findUnique({
     where: { organizationId_email: { organizationId: decoded.orgId, email: decoded.email } }
   });
-  if (!invite || invite.status === 'accepted') {
+  if (!invite || invite.status === InviteStatus.ACCEPTED) {
     throw new Error('Invalid or expired invite');
   }
   const org = await prisma.organization.findUnique({ where: { id: invite.organizationId } });
@@ -110,6 +111,6 @@ export async function acceptOrgInvite(rawToken: string) {
       }
     });
   }
-  await prisma.invite.update({ where: { id: invite.id }, data: { status: 'accepted' } });
+  await prisma.invite.update({ where: { id: invite.id }, data: { status: InviteStatus.ACCEPTED } });
   return { organizationId: invite.organizationId, email: invite.email };
 }
