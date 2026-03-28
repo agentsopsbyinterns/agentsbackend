@@ -8,16 +8,20 @@
     "schema": "src/prisma/schema.prisma"
   },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node --experimental-specifier-resolution=node dist/server.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "postinstall": "prisma generate",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
-  },
+  "dev": "tsx watch src/server.ts",
+  "build": "tsc -p tsconfig.json",
+  "start": "node --experimental-specifier-resolution=node dist/server.js",
+  "typecheck": "tsc -p tsconfig.json --noEmit",
+
+  "postinstall": "prisma generate",
+  "prisma:generate": "prisma generate",
+
+  "prisma:migrate": "echo \"❌ Not allowed. Only admin can run migrations\"",
+  "prisma:deploy": "prisma migrate deploy",
+  "prisma:studio": "prisma studio",
+
+  "db:push": "echo \"❌ Not allowed. Use migrate deploy only\""
+},
   "engines": {
     "node": ">=18.18.0"
   },

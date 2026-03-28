@@ -11,13 +11,12 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
     AND: [] 
   };
 
-  // Requirement: Only return projects where user is a member
-  if (filters?.userId) {
+  // Filter by user membership if specifically requested
+  if (filters?.userId && filters?.assignedToMe === true) {
     where.AND.push({
       members: {
         some: {
-          userId: filters.userId,
-          status: "ACTIVE"
+          userId: filters.userId
         }
       }
     });
@@ -140,9 +139,9 @@ export async function getProject(orgId: string, id: string, userId?: string) {
     }
   });
 
-  if (!membership || !membership.project || membership.status !== 'ACTIVE') {
-    console.warn(`[GET PROJECT] No active membership found for user ${userId} on project ${id}`);
-    throw notFound('Project not found or you are not an active member');
+  if (!membership || !membership.project) {
+    console.warn(`[GET PROJECT] No membership found for user ${userId} on project ${id}`);
+    throw notFound('Project not found or you are not a member');
   }
 
   const project = membership.project;
@@ -395,7 +394,7 @@ export async function detectProjectTaskChanges(projectId: string, newMeetingTask
 
 export async function listMyProjects(userId: string) {
   const memberships = await (prisma as any).projectMember.findMany({
-    where: { userId, status: "ACTIVE" },
+    where: { userId },
     include: {
       project: {
         include: {

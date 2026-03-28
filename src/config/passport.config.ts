@@ -2,6 +2,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy, Profile as GoogleProfile } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy, Profile as FacebookProfile } from 'passport-facebook';
 import { prisma } from '../prisma/client';
+import { type Prisma } from '@prisma/client';
 import { env } from './env';
 import { mapLegacyRole } from '../common/utils/roles';
 
@@ -54,7 +55,7 @@ async function ensureUserForProvider(provider: 'google' | 'facebook', profile: O
   }
 
   // No existing user found, create new one
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // Determine if this is the first user overall or in a potential organization
     // For simplicity with OAuth, we usually create a new Org if no invite exists
     
@@ -68,7 +69,7 @@ async function ensureUserForProvider(provider: 'google' | 'facebook', profile: O
     }) : null;
 
     if (invite) {
-      organizationId = invite.project.organizationId;
+      organizationId = invite.organizationId;
       globalRole = 'TEAM_MEMBER';
     } else {
       // Create new organization for the first user

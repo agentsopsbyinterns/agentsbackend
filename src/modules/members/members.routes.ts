@@ -26,12 +26,12 @@ export async function membersRoutes(app: FastifyInstance) {
     MembersController.removeMember
   );
   app.post(
-    '/accept-invite',
+    '/members/accept-invite',
     { preHandler: [authMiddleware] },
     MembersController.acceptProjectInvite
   );
   app.get(
-    '/accept-invite',
+    '/members/accept-invite',
     MembersController.acceptProjectInvite
   );
 }

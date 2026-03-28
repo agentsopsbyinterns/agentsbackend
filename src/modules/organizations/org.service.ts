@@ -2,37 +2,9 @@ import { prisma } from '../../prisma/client';
 import { InviteStatus } from '@prisma/client';
 import { CreateOrgInput, InviteInput } from './org.schema';
 import { audit } from '../../common/utils/audit';
-import crypto from 'crypto';
 import { sendMail } from '../../common/utils/mailer';
 import { env } from '../../config/env';
-
-function base64url(input: Buffer) {
-  return input.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-function sign(payload: string) {
-  const h = crypto.createHmac('sha256', env.HMAC_SECRET);
-  h.update(payload);
-  return h.digest('hex');
-}
-
-function createInviteToken(orgId: string, email: string, ttlMs: number) {
-  const data = { orgId, email, exp: Date.now() + ttlMs };
-  const payload = base64url(Buffer.from(JSON.stringify(data)));
-  const signature = sign(payload);
-  return `${payload}.${signature}`;
-}
-
-function verifyInviteToken(token: string) {
-  const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [payload, signature] = parts;
-  const expected = sign(payload);
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-  const decoded = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
-  if (typeof decoded.exp !== 'number' || decoded.exp < Date.now()) return null;
-  return decoded as { orgId: string; email: string; exp: number };
-}
+import { generateRandomToken, sha256 } from '../../common/utils/tokens';
 
 export async function createOrganization(userId: string, input: CreateOrgInput) {
   const org = await prisma.organization.create({ data: { name: input.name } });
@@ -45,15 +17,44 @@ export async function createOrganization(userId: string, input: CreateOrgInput) 
 }
 
 export async function createInvite(orgId: string, input: InviteInput & { inviterName: string }) {
-  const invite = await prisma.invite.upsert({
-    where: { organizationId_email: { organizationId: orgId, email: input.email } },
-    update: { status: InviteStatus.PENDING },
-    create: { organizationId: orgId, email: input.email, status: InviteStatus.PENDING }
+  const token = generateRandomToken(32);
+  const tokenHash = sha256(token);
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
+
+  // 1. Check for existing invite to update it, avoiding "null in unique" issues with upsert
+  let invite = await (prisma as any).projectInvite.findFirst({
+    where: { 
+      organizationId: orgId, 
+      projectId: null, 
+      email: input.email 
+    }
   });
+
+  if (invite) {
+    invite = await (prisma as any).projectInvite.update({
+      where: { id: invite.id },
+      data: { 
+        status: InviteStatus.PENDING,
+        tokenHash,
+        expiresAt
+      }
+    });
+  } else {
+    invite = await (prisma as any).projectInvite.create({
+      data: { 
+        organizationId: orgId, 
+        projectId: null as any,
+        email: input.email, 
+        status: InviteStatus.PENDING,
+        tokenHash,
+        expiresAt
+      }
+    });
+  }
+
   await audit(orgId, 'invite.create', undefined, { email: input.email });
   const org = await prisma.organization.findUnique({ where: { id: orgId } });
   const base = env.APP_URL;
-  const token = createInviteToken(orgId, input.email, 1000 * 60 * 60 * 24 * 7);
   const link = `${base}/accept-invite?token=${token}`;
   const orgName = org?.name || 'Your Organization';
   const text = `You're invited to join ${orgName}. Click this link to accept: ${link}`;
@@ -80,37 +81,8 @@ export async function createInvite(orgId: string, input: InviteInput & { inviter
 }
 
 export async function acceptOrgInvite(rawToken: string) {
-  const decoded = verifyInviteToken(rawToken);
-  if (!decoded) {
-    throw new Error('Invalid or expired invite');
-  }
-  const invite = await prisma.invite.findUnique({
-    where: { organizationId_email: { organizationId: decoded.orgId, email: decoded.email } }
-  });
-  if (!invite || invite.status === InviteStatus.ACCEPTED) {
-    throw new Error('Invalid or expired invite');
-  }
-  const org = await prisma.organization.findUnique({ where: { id: invite.organizationId } });
-  if (!org) {
-    throw new Error('Organization not found');
-  }
-  let user = await prisma.user.findUnique({ where: { email: invite.email } });
-  if (user) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { organizationId: invite.organizationId, globalRole: (user as any).globalRole || 'TEAM_MEMBER' }
-    });
-  } else {
-    user = await prisma.user.create({
-      data: {
-        email: invite.email,
-        name: invite.email.split('@')[0],
-        passwordHash: 'invited',
-        organizationId: invite.organizationId,
-        globalRole: 'TEAM_MEMBER'
-      }
-    });
-  }
-  await prisma.invite.update({ where: { id: invite.id }, data: { status: InviteStatus.ACCEPTED } });
-  return { organizationId: invite.organizationId, email: invite.email };
+  // This function is now superseded by the general acceptProjectInvite in members.service.ts
+  // But for backward compatibility with existing routes:
+  const { acceptProjectInvite } = await import('../members/members.service');
+  return acceptProjectInvite(rawToken);
 }
