@@ -3,7 +3,7 @@ import { InviteStatus, type Prisma } from '@prisma/client';
 import { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema';
 import { hashPassword, verifyPassword } from '../../common/utils/password';
 import { generateRandomToken, sha256, signAccessToken } from '../../common/utils/tokens';
-import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles';
+import { mapLegacyRole } from '../../common/utils/roles';
 import { badRequest, conflict, notFound, unauthorized } from '../../common/errors/api-error';
 import { sendMail } from '../../common/utils/mailer';
 import { env } from '../../config/env';
@@ -11,65 +11,9 @@ import { env } from '../../config/env';
 export async function signup(input: SignupInput & { organizationId?: string; projectId?: string; token?: string }) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) {
-    const raw = (existing as any).passwordHash as string | null | undefined;
-    const isPlaceholder = !raw || raw.trim().length === 0 || raw.trim().length < 20;
-    if (isPlaceholder) {
-      const newHash = await hashPassword(input.password);
-      const updated = await prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          name: input.name,
-          passwordHash: newHash,
-          organizationId: input.organizationId || existing.organizationId
-        }
-      });
-
-      // If we have a project token, add them to the project now
-      if (input.token && input.projectId) {
-        const tokenHash = sha256(input.token);
-        const invite = await (prisma as any).projectInvite.findUnique({ where: { tokenHash } });
-        if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
-           const projectRole = mapLegacyRole(invite.projectRole);
-           console.log(`[signup/placeholder] Adding existing user ${updated.id} to project ${input.projectId} with role ${projectRole}`);
-           const pm = await (prisma as any).projectMember.upsert({
-             where: { userId_projectId: { userId: updated.id, projectId: input.projectId } },
-             update: { projectRole },
-             create: {
-               userId: updated.id,
-               projectId: input.projectId,
-               projectRole
-             }
-           });
-           console.log(`[signup/placeholder] ProjectMember saved:`, { id: pm.id, role: pm.projectRole });
-           await (prisma as any).projectInvite.update({ 
-             where: { id: invite.id }, 
-             data: { 
-               status: InviteStatus.ACCEPTED
-             } 
-           });
-        }
-      }
-
-      const accessToken = signAccessToken({
-        sub: updated.id,
-        email: updated.email,
-        organizationId: updated.organizationId,
-        globalRole: (updated as any).globalRole || 'TEAM_MEMBER'
-      });
-      const rawRefresh = generateRandomToken(32);
-      const refreshHash = sha256(rawRefresh);
-      const refreshExpires = new Date(Date.now() + parseDuration(env.REFRESH_TOKEN_TTL));
-      await prisma.refreshToken.create({
-        data: { userId: updated.id, tokenHash: refreshHash, expiresAt: refreshExpires }
-      });
-      return {
-        user: sanitizeUser(updated),
-        accessToken,
-        refreshCookieValue: rawRefresh
-      };
-    }
-    throw conflict('Email already in use');
+    throw conflict('Email already in use. Please log in instead.');
   }
+
   const passwordHash = await hashPassword(input.password);
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     let orgId = input.organizationId;
@@ -95,26 +39,35 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
     // If we have a project token, add them to the project now
     if (input.token && input.projectId) {
       const tokenHash = sha256(input.token);
+      console.log(`[signup/new] Checking tokenHash: ${tokenHash} for project: ${input.projectId}`);
       const invite = await (tx.projectInvite as any).findUnique({ where: { tokenHash } });
-      if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
-         const projectRole = mapLegacyRole(invite.projectRole);
-         console.log(`[signup/new] Adding new user ${user.id} to project ${input.projectId} with role ${projectRole}`);
-         const pm = await (tx.projectMember as any).upsert({
-           where: { userId_projectId: { userId: user.id, projectId: input.projectId } },
-           update: { projectRole },
-           create: {
-             userId: user.id,
-             projectId: input.projectId,
-             projectRole
+      
+      if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date()) {
+         // Verify it's for this project (unless it's an org invite where projectId is null)
+         if (!invite.projectId || invite.projectId === input.projectId) {
+           const projectRole = mapLegacyRole(invite.projectRole || 'CONTRIBUTOR');
+           console.log(`[signup/new] Adding user ${user.id} to project ${invite.projectId || 'org'} with role ${projectRole}`);
+           
+           if (invite.projectId) {
+             await (tx.projectMember as any).upsert({
+               where: { userId_projectId: { userId: user.id, projectId: invite.projectId } },
+               update: { projectRole },
+               create: {
+                 userId: user.id,
+                 projectId: invite.projectId,
+                 projectRole,
+                 joinedAt: new Date()
+               }
+             });
            }
-         });
-         console.log(`[signup/new] ProjectMember saved:`, { id: pm.id, role: pm.projectRole });
-         await (tx.projectInvite as any).update({ 
-           where: { id: invite.id }, 
-           data: { 
-             status: InviteStatus.ACCEPTED
-           } 
-         });
+           
+           await (tx.projectInvite as any).update({ 
+             where: { id: invite.id }, 
+             data: { 
+               status: InviteStatus.ACCEPTED
+             } 
+           });
+         }
       }
     }
 
@@ -148,38 +101,39 @@ export async function login(input: LoginInput & { projectId?: string; token?: st
   const ok = await verifyPassword(user.passwordHash, input.password);
   if (!ok) throw unauthorized('Invalid credentials');
 
+  // Handle invite token during login if present
   if (input.token && input.projectId) {
     const tokenHash = sha256(input.token);
+    console.log(`[login/invite] Checking tokenHash: ${tokenHash} for project: ${input.projectId}`);
     const invite = await (prisma as any).projectInvite.findUnique({ where: { tokenHash } });
-    if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date() && invite.projectId === input.projectId) {
-       const projectRole = mapLegacyRole(invite.projectRole);
-       console.log(`[login/invite] Adding user ${user.id} to project ${input.projectId} with role ${projectRole}`);
-       await (prisma as any).projectMember.upsert({
-         where: { userId_projectId: { userId: user.id, projectId: input.projectId } },
-         update: { projectRole },
-         create: {
-           userId: user.id,
-           projectId: input.projectId,
-           projectRole
-         }
-       });
-       
-       await (prisma as any).projectInvite.update({ 
-         where: { id: invite.id }, 
-         data: { 
-           status: InviteStatus.ACCEPTED
-         } 
-       });
-
-       // Mark organization invite as active in the legacy Invite table
-       const orgInvite = await prisma.invite.findFirst({
-         where: { organizationId: user.organizationId || '', email: user.email }
-       });
-       if (orgInvite) {
-         await prisma.invite.update({
-           where: { id: orgInvite.id },
-           data: { status: InviteStatus.ACTIVE }
-         });
+    
+    if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date()) {
+       // Verify it's for this project (unless it's an org invite where projectId is null)
+       if (!invite.projectId || invite.projectId === input.projectId) {
+         const projectRole = mapLegacyRole(invite.projectRole || 'CONTRIBUTOR');
+         
+         await (prisma as any).$transaction([
+           // Only create membership if it's a project invite
+           ...(invite.projectId ? [(prisma as any).projectMember.upsert({
+             where: { userId_projectId: { userId: user.id, projectId: invite.projectId } },
+             update: { projectRole },
+             create: {
+               userId: user.id,
+               projectId: invite.projectId,
+               projectRole,
+               joinedAt: new Date()
+             }
+           })] : []),
+           // Always mark invite as accepted
+           (prisma as any).projectInvite.update({ 
+             where: { id: invite.id }, 
+             data: { 
+               status: InviteStatus.ACCEPTED
+             } 
+           })
+         ]);
+         
+         console.log(`[login/invite] User ${user.id} joined project ${invite.projectId || 'org'} via token`);
        }
     }
   }

@@ -3,9 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider          = "mysql"
-  url               = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model Organization {
@@ -17,10 +16,10 @@ model Organization {
   auditLogs              AuditLog[]
   conversations          Conversation[]
   integrationConnections IntegrationConnection[]
-  invites                Invite[]
-  meetings               Meeting[]
   projects               Project[]
   users                  User[]
+  projectInvites         ProjectInvite[]
+  meetings               Meeting[]
 }
 
 model User {
@@ -34,6 +33,7 @@ model User {
   avatarUrl            String?
   deletedAt            DateTime?
   globalRole           GlobalRole           @default(ADMIN)
+  apiKeys              ApiKey[]
   attendees            Attendee[]
   auditLogs            AuditLog[]
   conversationsCreated Conversation[]       @relation("ConversationCreatedBy")
@@ -43,7 +43,6 @@ model User {
   projectMemberships   ProjectMember[]
   assignedTasks        ProjectTask[]        @relation("TaskAssignee")
   refreshTokens        RefreshToken[]
-  apiKeys              ApiKey[]
   organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
@@ -72,19 +71,23 @@ model RefreshToken {
   @@index([userId])
 }
 
-model Invite {
+model ProjectInvite {
   id             String       @id @default(cuid())
   organizationId String
+  projectId      String?
   email          String
+  projectRole    ProjectRole?
+  tokenHash      String       @unique
+  expiresAt      DateTime
   status         InviteStatus @default(PENDING)
   createdAt      DateTime     @default(now())
-  projectId      String?
-  projectRole    ProjectRole  @default(CONTRIBUTOR)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  Project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, email])
-  @@index([projectId], map: "Invite_projectId_fkey")
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@unique([organizationId, projectId, email], name: "org_project_email")
 }
 
 model Meeting {
@@ -126,7 +129,7 @@ model Attendee {
   user      User?   @relation(fields: [userId], references: [id])
 
   @@index([meetingId])
-  @@index([userId], map: "Attendee_userId_fkey")
+  @@index([userId])
 }
 
 model TranscriptSegment {
@@ -134,7 +137,7 @@ model TranscriptSegment {
   meetingId String
   speaker   String
   timestamp Int
-  text      String
+  text      String  @db.Text
   meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
@@ -143,7 +146,7 @@ model TranscriptSegment {
 model ActionItem {
   id        String    @id @default(cuid())
   meetingId String
-  text      String
+  text      String    @db.Text
   assignee  String?
   dueDate   DateTime?
   meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
@@ -167,7 +170,7 @@ model Project {
   clientName     String?
   createdById    String?
   budgetTotal    Decimal            @default(0.00) @db.Decimal(12, 2)
-  Invite         Invite[]
+  apiKeys        ApiKey[]
   meetings       Meeting[]
   createdBy      User?              @relation("ProjectCreatedBy", fields: [createdById], references: [id])
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -177,10 +180,9 @@ model Project {
   milestones     ProjectMilestone[]
   risks          ProjectRisk[]
   tasks          ProjectTask[]
-  apiKeys        ApiKey[]
 
   @@index([organizationId])
-  @@index([createdById], map: "Project_createdById_fkey")
+  @@index([createdById])
 }
 
 model ProjectMember {
@@ -215,36 +217,13 @@ model ProjectRisk {
   id          String   @id @default(cuid())
   projectId   String
   title       String
-  description String?
+  description String?  @db.Text
   severity    String   @default("medium")
   status      String   @default("Active")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
-}
-
-enum InviteStatus {
-  PENDING
-  ACCEPTED
-  EXPIRED
-  INVITED
-  ACTIVE
-}
-
-model ProjectInvite {
-  id          String       @id @default(cuid())
-  projectId   String
-  email       String
-  projectRole ProjectRole
-  tokenHash   String       @unique
-  expiresAt   DateTime
-  status      InviteStatus @default(PENDING)
-  createdAt   DateTime     @default(now())
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, email])
   @@index([projectId])
 }
 
@@ -255,7 +234,7 @@ model ProjectTask {
   status         TaskStatus   @default(NOT_STARTED)
   dueDate        DateTime?
   assigneeUserId String?
-  description    String?
+  description    String?      @db.Text
   priority       TaskPriority @default(MEDIUM)
   meetingId      String?
   assignee       User?        @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
@@ -291,7 +270,7 @@ model Conversation {
   messages       Message[]
 
   @@index([organizationId])
-  @@index([createdById], map: "Conversation_createdById_fkey")
+  @@index([createdById])
 }
 
 model Message {
@@ -308,7 +287,7 @@ model Message {
   user           User?        @relation(fields: [userId], references: [id])
 
   @@index([conversationId])
-  @@index([userId], map: "Message_userId_fkey")
+  @@index([userId])
 }
 
 model Integration {
@@ -330,7 +309,7 @@ model IntegrationConnection {
 
   @@unique([organizationId, integrationId])
   @@index([organizationId])
-  @@index([integrationId], map: "IntegrationConnection_integrationId_fkey")
+  @@index([integrationId])
 }
 
 model WebhookEvent {
@@ -352,22 +331,28 @@ model AuditLog {
   user           User?        @relation(fields: [userId], references: [id])
 
   @@index([organizationId])
-  @@index([userId], map: "AuditLog_userId_fkey")
+  @@index([userId])
 }
 
 model ApiKey {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  keyHash   String   @unique
+  keyHash   String    @unique
   userId    String
   projectId String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   lastUsed  DateTime?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([projectId])
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
 }
 
 enum GlobalRole {
