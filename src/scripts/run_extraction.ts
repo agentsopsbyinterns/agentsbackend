@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { extractMeetingData, cleanTranscript } from "../services/ai.service";
+import { extractMeetingData, cleanTranscript } from "../services/ai.service.js";
 
 async function main() {
   const transcript = `Amit (Project Manager):

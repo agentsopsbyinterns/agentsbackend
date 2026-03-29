@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { unauthorized } from '../../common/errors/api-error';
-import { createConversation, createMessage, listConversations, listMessages, askAI } from './chat.service';
-import { createConversationSchema, sendMessageSchema } from './chat.schema';
-import { sseInit, sseSend, sseClose } from '../../common/utils/sse';
+import { unauthorized } from '../../common/errors/api-error.js';
+import { createConversation, createMessage, listConversations, listMessages, askAI } from './chat.service.js';
+import { createConversationSchema, sendMessageSchema } from './chat.schema.js';
+import { sseInit, sseSend, sseClose } from '../../common/utils/sse.js';
 
 export const ChatController = {
   createConversation: async (request: FastifyRequest, reply: FastifyReply) => {

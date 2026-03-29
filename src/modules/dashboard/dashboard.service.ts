@@ -1,4 +1,4 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 
 export async function getDashboard(orgId: string) {
   const [users, meetings, projects, actions] = await Promise.all([

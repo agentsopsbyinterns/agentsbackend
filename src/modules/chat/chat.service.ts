@@ -1,6 +1,7 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 import OpenAI from "openai";
-import { env } from "../../config/env";
+import { env } from "../../config/env.js";
+import { badRequest, notFound } from '../../common/errors/api-error.js';
 
 export async function createConversation(orgId: string, userId: string) {
   return (prisma as any).conversation.create({

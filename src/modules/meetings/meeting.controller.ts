@@ -1,10 +1,10 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { unauthorized } from '../../common/errors/api-error';
-import { getPagination } from '../../common/utils/pagination';
-import { createMeetingSchema, rescheduleSchema, reviewSchema } from './meeting.schema';
-import { createMeeting, deleteMeeting, getMeeting, inviteBot, listMeetings, meetingInsights, meetingTimeline, meetingTranscript, rescheduleMeeting, updateActionItem, createReview, saveRecordingAndExtract } from './meeting.service';
-import { cleanTranscript, extractMeetingData } from '../../services/ai.service';
+import { unauthorized } from '../../common/errors/api-error.js';
+import { getPagination } from '../../common/utils/pagination.js';
+import { createMeetingSchema, rescheduleSchema, reviewSchema } from './meeting.schema.js';
+import { createMeeting, deleteMeeting, getMeeting, inviteBot, listMeetings, meetingInsights, meetingTimeline, meetingTranscript, rescheduleMeeting, updateActionItem, createReview, saveRecordingAndExtract } from './meeting.service.js';
+import { cleanTranscript, extractMeetingData } from '../../services/ai.service.js';
 import { z } from 'zod';
 
 export const MeetingController = {

@@ -1,5 +1,5 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
-import { globalSearch } from './search.service';
+import { FastifyReply, FastifyRequest } from 'fastify';
+import { globalSearch } from './search.service.js';
 
 export async function handleGlobalSearch(request: FastifyRequest, reply: FastifyReply) {
   const { q } = request.query as { q: string };

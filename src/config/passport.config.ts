@@ -1,10 +1,10 @@
+import { prisma } from '../prisma/client.js';
+import { Prisma } from '@prisma/client';
+import { env } from './env.js';
 import passport from 'passport';
 import { Strategy as GoogleStrategy, Profile as GoogleProfile } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy, Profile as FacebookProfile } from 'passport-facebook';
-import { prisma } from '../prisma/client';
-import { type Prisma } from '@prisma/client';
-import { env } from './env';
-import { mapLegacyRole } from '../common/utils/roles';
+import { mapLegacyRole } from '../common/utils/roles.js';
 
 type OAuthProfile = {
   id: string;

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import type { Secret, SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
-import { jwtConfig } from '../../config/jwt';
+import { jwtConfig } from '../../config/jwt.js';
 
 export function signAccessToken(payload: object) {
   return (jwt as any).sign(payload as any, jwtConfig.access.secret as Secret, { expiresIn: jwtConfig.access.expiresIn } as SignOptions);

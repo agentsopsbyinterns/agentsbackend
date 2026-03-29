@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { env } from "../config/env";
+import { env } from "../config/env.js";
 
 let _genAI: GoogleGenerativeAI | null = null;
 function getGenAI() {

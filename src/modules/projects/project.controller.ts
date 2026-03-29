@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { prisma } from '../../prisma/client';
-import { unauthorized } from '../../common/errors/api-error';
-import { getPagination } from '../../common/utils/pagination';
-import { createProject, deleteProject, getProject, listProjects, listMyProjects as listMyProjectsService, listTasks, projectMetrics, updateProject, inviteTeamMember, updateProjectMemberRole, deleteProjectMember, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks, listMilestones, createMilestone, updateMilestone, deleteMilestone, listRisks, createRisk, updateRisk, deleteRisk, listApiKeys, createApiKey, deleteApiKey } from './project.service';
+import { prisma } from '../../prisma/client.js';
+import { unauthorized } from '../../common/errors/api-error.js';
+import { getPagination } from '../../common/utils/pagination.js';
+import { createProject, deleteProject, getProject, listProjects, listMyProjects as listMyProjectsService, listTasks, projectMetrics, updateProject, inviteTeamMember, updateProjectMemberRole, deleteProjectMember, createTask, updateTask, deleteTask, getBudget, setBudget, addExpense, listExpenses, updateExpense, deleteExpense, listProjectMeetings, mergeMeetingToProject, detectProjectTaskChanges, listProjectMembers, getProjectIntegrations, archiveProject, syncAsana, generateAITasks, listMilestones, createMilestone, updateMilestone, deleteMilestone, listRisks, createRisk, updateRisk, deleteRisk, listApiKeys, createApiKey, deleteApiKey } from './project.service.js';
 
 export const ProjectController = {
   mergeMeeting: async (request: FastifyRequest, reply: FastifyReply) => {

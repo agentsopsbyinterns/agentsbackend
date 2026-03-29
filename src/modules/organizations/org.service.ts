@@ -1,10 +1,10 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 import { InviteStatus } from '@prisma/client';
-import { CreateOrgInput, InviteInput } from './org.schema';
-import { audit } from '../../common/utils/audit';
-import { sendMail } from '../../common/utils/mailer';
-import { env } from '../../config/env';
-import { generateRandomToken, sha256 } from '../../common/utils/tokens';
+import { CreateOrgInput, InviteInput } from './org.schema.js';
+import { audit } from '../../common/utils/audit.js';
+import { sendMail } from '../../common/utils/mailer.js';
+import { env } from '../../config/env.js';
+import { generateRandomToken, sha256 } from '../../common/utils/tokens.js';
 
 export async function createOrganization(userId: string, input: CreateOrgInput) {
   const org = await prisma.organization.create({ data: { name: input.name } });
@@ -83,6 +83,6 @@ export async function createInvite(orgId: string, input: InviteInput & { inviter
 export async function acceptOrgInvite(rawToken: string) {
   // This function is now superseded by the general acceptProjectInvite in members.service.ts
   // But for backward compatibility with existing routes:
-  const { acceptProjectInvite } = await import('../members/members.service');
+  const { acceptProjectInvite } = await import('../members/members.service.js');
   return acceptProjectInvite(rawToken);
 }

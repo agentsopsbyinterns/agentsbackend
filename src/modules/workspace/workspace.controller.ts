@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { unauthorized } from '../../common/errors/api-error';
+import { unauthorized } from '../../common/errors/api-error.js';
 import { listUserWorkspace } from './workspace.service.js';
 
 export const WorkspaceController = {

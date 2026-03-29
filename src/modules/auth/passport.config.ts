@@ -1,8 +1,8 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy, Profile as GoogleProfile } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy, Profile as FacebookProfile } from 'passport-facebook';
-import { prisma } from '../../prisma/client';
-import { env } from '../../config/env';
+import { prisma } from '../../prisma/client.js';
+import { env } from '../../config/env.js';
 
 type OAuthProfile = {
   id: string;

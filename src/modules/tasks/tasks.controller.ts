@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { unauthorized } from '../../common/errors/api-error';
-import { bulkCreateTasksSchema } from './tasks.schema';
-import { bulkCreateTasks } from './tasks.service';
+import { unauthorized } from '../../common/errors/api-error.js';
+import { bulkCreateTasksSchema } from './tasks.schema.js';
+import { bulkCreateTasks } from './tasks.service.js';
 
 export const TaskController = {
   bulkCreate: async (request: FastifyRequest, reply: FastifyReply) => {

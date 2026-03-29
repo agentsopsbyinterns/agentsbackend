@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import jwt from 'jsonwebtoken';
-import { jwtConfig } from '../../config/jwt';
-import { unauthorized } from '../../common/errors/api-error';
+import { jwtConfig } from '../../config/jwt.js';
+import { unauthorized } from '../../common/errors/api-error.js';
 
 export async function authMiddleware(request: FastifyRequest, _reply: FastifyReply) {
   const header = request.headers.authorization;

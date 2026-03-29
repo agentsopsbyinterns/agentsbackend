@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { IntegrationController } from './integration.controller';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
+import { IntegrationController } from './integration.controller.js';
 
 export async function integrationRoutes(app: FastifyInstance) {
   app.get('/integrations', IntegrationController.list);

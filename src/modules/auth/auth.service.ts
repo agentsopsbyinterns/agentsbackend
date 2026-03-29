@@ -1,12 +1,12 @@
-import { prisma } from '../../prisma/client';
-import { InviteStatus, type Prisma } from '@prisma/client';
-import { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema';
-import { hashPassword, verifyPassword } from '../../common/utils/password';
-import { generateRandomToken, sha256, signAccessToken } from '../../common/utils/tokens';
-import { mapLegacyRole } from '../../common/utils/roles';
-import { badRequest, conflict, notFound, unauthorized } from '../../common/errors/api-error';
-import { sendMail } from '../../common/utils/mailer';
-import { env } from '../../config/env';
+import { prisma } from '../../prisma/client.js';
+import { InviteStatus, Prisma } from '@prisma/client';
+import { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema.js';
+import { hashPassword, verifyPassword } from '../../common/utils/password.js';
+import { generateRandomToken, sha256, signAccessToken } from '../../common/utils/tokens.js';
+import { mapLegacyRole } from '../../common/utils/roles.js';
+import { badRequest, conflict, notFound, unauthorized } from '../../common/errors/api-error.js';
+import { sendMail } from '../../common/utils/mailer.js';
+import { env } from '../../config/env.js';
 
 export async function signup(input: SignupInput & { organizationId?: string; projectId?: string; token?: string }) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });

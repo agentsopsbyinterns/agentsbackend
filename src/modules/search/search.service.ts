@@ -1,4 +1,4 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 
 export async function globalSearch(orgId: string, query: string) {
   if (!query) {

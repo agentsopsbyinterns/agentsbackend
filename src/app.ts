@@ -1,24 +1,24 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
-import { env, isProd } from './config/env';
-import { ApiError } from './common/errors/api-error';
-import { registerSwagger } from './docs/swagger';
-import * as authModule from './modules/auth/auth.routes';
-import { orgRoutes } from './modules/organizations/org.routes';
-import { meetingRoutes } from './modules/meetings/meeting.routes';
-import { projectRoutes } from './modules/projects/project.routes';
-import { membersRoutes } from './modules/members/members.routes';
-import { chatRoutes } from './modules/chat/chat.routes';
-import { integrationRoutes } from './modules/integrations/integration.routes';
-import { googleCalendarRoutes } from './modules/integrations/google-calendar.routes';
-import { webhookRoutes } from './modules/webhooks/webhook.routes';
-import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
-import { taskRoutes } from './modules/tasks/tasks.routes';
-import { searchRoutes } from './modules/search/search.routes';
-import usersRoutes from './modules/users/users.routes';
+import { env, isProd } from './config/env.js';
+import { ApiError } from './common/errors/api-error.js';
+import { registerSwagger } from './docs/swagger.js';
+import * as authModule from './modules/auth/auth.routes.js';
+import { orgRoutes } from './modules/organizations/org.routes.js';
+import { meetingRoutes } from './modules/meetings/meeting.routes.js';
+import { projectRoutes } from './modules/projects/project.routes.js';
+import { membersRoutes } from './modules/members/members.routes.js';
+import { chatRoutes } from './modules/chat/chat.routes.js';
+import { integrationRoutes } from './modules/integrations/integration.routes.js';
+import { googleCalendarRoutes } from './modules/integrations/google-calendar.routes.js';
+import { webhookRoutes } from './modules/webhooks/webhook.routes.js';
+import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
+import { taskRoutes } from './modules/tasks/tasks.routes.js';
+import { searchRoutes } from './modules/search/search.routes.js';
+import usersRoutes from './modules/users/users.routes.js';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
-import { idempotencyMiddleware } from './common/middleware/idempotency.middleware';
+import { idempotencyMiddleware } from './common/middleware/idempotency.middleware.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -67,7 +67,7 @@ export async function buildApp() {
       })
     );
     try {
-      const pp = await import('./config/passport.config');
+      const pp = await import('./config/passport.config.js');
       setupPassport = (pp as any).setupPassport;
       if (setupPassport) setupPassport();
     } catch {}
@@ -160,7 +160,7 @@ export async function buildApp() {
 
   // Debug API to inspect ProjectMember records
   app.get('/debug/project-members', async (request, reply) => {
-    const { prisma } = await import('./prisma/client');
+    const { prisma } = await import('./prisma/client.js');
     const members = await (prisma as any).projectMember.findMany({
       include: {
         user: { select: { email: true, name: true } },
@@ -172,7 +172,7 @@ export async function buildApp() {
 
   // Cleanup API to fix invalid ProjectMember roles
   app.post('/debug/cleanup-project-roles', async (request, reply) => {
-    const { prisma } = await import('./prisma/client');
+    const { prisma } = await import('./prisma/client.js');
     
     // Using raw SQL for safety when enum values might be corrupted/empty
     const result = await (prisma as any).$executeRawUnsafe(`

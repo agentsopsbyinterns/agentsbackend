@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { forbidden, unauthorized } from '../errors/api-error';
-import { prisma } from '../../prisma/client';
-import { mapLegacyRole, PROJECT_ROLES, ProjectRole } from '../utils/roles';
+import { forbidden, unauthorized } from '../errors/api-error.js';
+import { prisma } from '../../prisma/client.js';
+import { mapLegacyRole, PROJECT_ROLES, ProjectRole } from '../utils/roles.js';
 
 export function rbacMiddleware(roles: Array<ProjectRole>) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {

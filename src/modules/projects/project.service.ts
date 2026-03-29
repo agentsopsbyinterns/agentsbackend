@@ -1,8 +1,8 @@
-import { prisma } from '../../prisma/client';
-import { generateRandomToken, sha256 } from '../../common/utils/tokens';
-import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles';
-import { mergeProjectData, detectTaskChanges } from '../../services/ai.service';
-import { badRequest, notFound, forbidden } from '../../common/errors/api-error';
+import { prisma } from '../../prisma/client.js';
+import { generateRandomToken, sha256 } from '../../common/utils/tokens.js';
+import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles.js';
+import { mergeProjectData, detectTaskChanges } from '../../services/ai.service.js';
+import { badRequest, notFound, forbidden } from '../../common/errors/api-error.js';
 
 export async function listProjects(orgId: string, skip: number, take: number, filters?: { search?: string; health?: string; status?: string; client?: string; assignedToMe?: boolean; userId?: string }) {
   const where: any = { 

@@ -1,6 +1,6 @@
-import { env } from "../config/env";
-import { callGemini } from "./gemini.service";
-import { callOpenAI } from "./openai.service";
+import { env } from "../config/env.js";
+import { callGemini } from "./gemini.service.js";
+import { callOpenAI } from "./openai.service.js";
 
 function cleanJSON(text: string): string {
   // Also remove markdown code blocks

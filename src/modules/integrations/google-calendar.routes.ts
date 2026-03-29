@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { exchangeCodeForTokens, getAuthUrl, storeTokens, getCalendars, getUpcomingEvents, createEvent, getConnectedAccount } from './google-calendar.service';
-import { env } from '../../config/env';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
+import { exchangeCodeForTokens, getAuthUrl, storeTokens, getCalendars, getUpcomingEvents, createEvent, getConnectedAccount } from './google-calendar.service.js';
+import { env } from '../../config/env.js';
 
 export async function googleCalendarRoutes(app: FastifyInstance) {
   app.get('/integrations/google-calendar/initiate', { preHandler: [authMiddleware] }, async (req, reply) => {

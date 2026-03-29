@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { verifyHmacSignature } from '../../common/utils/hmac';
-import { prisma } from '../../prisma/client';
+import { verifyHmacSignature } from '../../common/utils/hmac.js';
+import { prisma } from '../../prisma/client.js';
 
 async function handleEvent(request: FastifyRequest, reply: FastifyReply, type: string) {
   const signature = request.headers['x-signature'] as string | undefined;

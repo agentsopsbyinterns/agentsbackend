@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import * as OrgService from './org.service';
-import { createOrgSchema, inviteSchema, bulkInviteSchema } from './org.schema';
-import { unauthorized } from '../../common/errors/api-error';
-import { prisma } from '../../prisma/client';
+import * as OrgService from './org.service.js';
+import { createOrgSchema, inviteSchema, bulkInviteSchema } from './org.schema.js';
+import { unauthorized } from '../../common/errors/api-error.js';
+import { prisma } from '../../prisma/client.js';
 
 export const OrgController = {
   create: async (request: FastifyRequest, reply: FastifyReply) => {

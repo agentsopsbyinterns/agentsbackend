@@ -1,8 +1,8 @@
-import { prisma } from '../../prisma/client';
-import { CreateMeetingInput, RescheduleInput, ReviewInput } from './meeting.schema';
-import { audit } from '../../common/utils/audit';
-import { createEvent, getStoredTokens } from '../integrations/google-calendar.service';
-import { sendMail } from '../../common/utils/mailer';
+import { prisma } from '../../prisma/client.js';
+import { CreateMeetingInput, RescheduleInput, ReviewInput } from './meeting.schema.js';
+import { audit } from '../../common/utils/audit.js';
+import { createEvent, getStoredTokens } from '../integrations/google-calendar.service.js';
+import { sendMail } from '../../common/utils/mailer.js';
 // Legacy extraction removed in favor of Gemini-only pipeline
 import fs from 'fs/promises';
 import path from 'path';

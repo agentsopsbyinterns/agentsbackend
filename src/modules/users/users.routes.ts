@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 
 export default async function usersRoutes(fastify: FastifyInstance) {
   fastify.get('/api/users', async (request, reply) => {

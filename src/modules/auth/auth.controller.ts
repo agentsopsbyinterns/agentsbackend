@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { env, isProd } from '../../config/env';
-import { forgotPassword, login, me, refresh, resetPassword, signup, logout } from './auth.service';
-import { forgotPasswordSchema, loginSchema, resetPasswordSchema, signupSchema, logoutSchema } from './auth.schema';
-import { unauthorized } from '../../common/errors/api-error';
+import { env, isProd } from '../../config/env.js';
+import { forgotPassword, login, me, refresh, resetPassword, signup, logout } from './auth.service.js';
+import { forgotPasswordSchema, loginSchema, resetPasswordSchema, signupSchema, logoutSchema } from './auth.schema.js';
+import { unauthorized } from '../../common/errors/api-error.js';
 
 function setRefreshCookie(reply: FastifyReply, value: string) {
   (reply as any).setCookie(env.REFRESH_COOKIE_NAME, value, {

@@ -1,4 +1,4 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 
 export async function audit(organizationId: string, action: string, userId?: string, meta?: any) {
   const metaString = meta ? JSON.stringify(meta) : null;
