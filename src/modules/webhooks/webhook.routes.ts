@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { WebhookController } from './webhook.controller';
+import { WebhookController } from './webhook.controller.js';
 
 export async function webhookRoutes(app: FastifyInstance) {
   app.post('/webhooks/meeting_transcript_ready', WebhookController.transcriptReady);

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { env } from '../../config/env';
+import { env } from '../../config/env.js';
 
 export function verifyHmacSignature(payload: string, signature: string) {
   const hmac = crypto.createHmac('sha256', env.HMAC_SECRET);

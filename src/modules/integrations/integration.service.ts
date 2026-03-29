@@ -1,4 +1,4 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 
 export async function listIntegrations() {
   const names = ['google-calendar', 'asana', 'deepgram', 'recall'];

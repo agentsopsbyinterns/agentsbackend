@@ -1,4 +1,4 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 import { TaskPriority, TaskStatus } from '@prisma/client';
 
 export async function bulkCreateTasks(projectId: string, tasks: any[]) {

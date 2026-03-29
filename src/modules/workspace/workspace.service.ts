@@ -1,4 +1,4 @@
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 
 export async function listUserWorkspace(userId: string) {
   const memberships = await (prisma as any).projectMember.findMany({

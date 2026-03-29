@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { unauthorized } from '../../common/errors/api-error';
-import { getDashboard } from './dashboard.service';
+import { unauthorized } from '../../common/errors/api-error.js';
+import { getDashboard } from './dashboard.service.js';
 
 export const DashboardController = {
   get: async (request: FastifyRequest, reply: FastifyReply) => {

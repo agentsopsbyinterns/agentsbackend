@@ -1,1 +1,1 @@
-export { sendMail } from '../common/utils/mailer';
+export { sendMail } from '../common/utils/mailer.js';

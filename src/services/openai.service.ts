@@ -1,4 +1,4 @@
-import { env } from "../config/env";
+import { env } from "../config/env.js";
 import OpenAI from "openai";
 
 let _openai: any | null = null;

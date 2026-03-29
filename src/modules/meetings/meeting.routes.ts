@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { rbacMiddleware } from '../../common/middleware/rbac.middleware';
-import { MeetingController } from './meeting.controller';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
+import { rbacMiddleware } from '../../common/middleware/rbac.middleware.js';
+import { MeetingController } from './meeting.controller.js';
 
 export async function meetingRoutes(app: FastifyInstance) {
   app.post('/meetings', { preHandler: [authMiddleware, rbacMiddleware(['ADMIN', 'PROJECT_MANAGER'])] }, MeetingController.create);

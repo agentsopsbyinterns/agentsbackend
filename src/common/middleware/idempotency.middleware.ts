@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { getRedis } from '../../config/redis';
+import { getRedis } from '../../config/redis.js';
 
 export function idempotencyMiddleware() {
   const redis = getRedis();

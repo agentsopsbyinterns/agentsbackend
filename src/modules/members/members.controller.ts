@@ -1,6 +1,6 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { getProjectMembers, inviteMember, removeMember, updateMemberRole, acceptProjectInvite } from './members.service';
+import { getProjectMembers, inviteMember, removeMember, updateMemberRole, acceptProjectInvite } from './members.service.js';
 
 export const MembersController = {
   getMembers: async (request: FastifyRequest, reply: FastifyReply) => {

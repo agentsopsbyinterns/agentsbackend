@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { OrgController } from './org.controller';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { rbacMiddleware } from '../../common/middleware/rbac.middleware';
+import { OrgController } from './org.controller.js';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
+import { rbacMiddleware } from '../../common/middleware/rbac.middleware.js';
 
 export async function orgRoutes(app: FastifyInstance) {
   app.post('/organizations', { preHandler: [authMiddleware, rbacMiddleware(['ADMIN'])] }, OrgController.create);

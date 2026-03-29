@@ -1,9 +1,11 @@
 import { FastifyInstance } from 'fastify';
-import { AuthController } from './auth.controller';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
+import { AuthController } from './auth.controller.js';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
 import passport from 'passport';
 import express from 'express';
-import { env } from '../../config/env';
+import { env } from '../../config/env.js';
+import { signAccessToken, generateRandomToken, sha256 } from '../../common/utils/tokens.js';
+import { prisma } from '../../prisma/client.js';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/signup', AuthController.signup);

@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { unauthorized } from '../../common/errors/api-error';
-import { connectIntegration, disconnectIntegration, integrationStatus, listIntegrations } from './integration.service';
+import { unauthorized } from '../../common/errors/api-error.js';
+import { connectIntegration, disconnectIntegration, integrationStatus, listIntegrations } from './integration.service.js';
 
 export const IntegrationController = {
   list: async (_request: FastifyRequest, reply: FastifyReply) => {

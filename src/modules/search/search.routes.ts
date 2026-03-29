@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { handleGlobalSearch } from './search.controller';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
+import { handleGlobalSearch } from './search.controller.js';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
 
 export async function searchRoutes(app: FastifyInstance) {
   app.get('/api/search', {

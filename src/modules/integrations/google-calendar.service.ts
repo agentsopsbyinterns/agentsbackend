@@ -1,8 +1,8 @@
 import { google } from 'googleapis';
-import { env } from '../../config/env';
+import { env } from '../../config/env.js';
 import fs from 'fs/promises';
 import path from 'path';
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 import jwt from 'jsonwebtoken';
 
 type StoredTokens = {

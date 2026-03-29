@@ -1,10 +1,10 @@
 
-import { prisma } from '../../prisma/client';
+import { prisma } from '../../prisma/client.js';
 import { ProjectRole, InviteStatus } from '@prisma/client';
-import { sendMail } from '../../common/utils/mailer';
-import { env } from '../../config/env';
-import { generateRandomToken, sha256 } from '../../common/utils/tokens';
-import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles';
+import { sendMail } from '../../common/utils/mailer.js';
+import { env } from '../../config/env.js';
+import { generateRandomToken, sha256 } from '../../common/utils/tokens.js';
+import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles.js';
 
 // Get all members for a specific project
 export async function getProjectMembers(projectId: string) {

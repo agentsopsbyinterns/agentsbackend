@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { ChatController } from './chat.controller';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
+import { ChatController } from './chat.controller.js';
 
 export async function chatRoutes(app: FastifyInstance) {
   app.post('/conversations', { preHandler: [authMiddleware] }, ChatController.createConversation);

@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { requireProjectRole } from '../../common/middleware/rbac.middleware';
-import { ProjectController } from './project.controller';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
+import { requireProjectRole } from '../../common/middleware/rbac.middleware.js';
+import { ProjectController } from './project.controller.js';
 
 export async function projectRoutes(app: FastifyInstance) {
   app.get('/projects', { preHandler: [authMiddleware] }, ProjectController.list);

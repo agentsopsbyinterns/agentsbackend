@@ -1,8 +1,8 @@
 
 import { FastifyInstance } from 'fastify';
-import { MembersController } from './members.controller';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { requireProjectRole } from '../../common/middleware/rbac.middleware';
+import { MembersController } from './members.controller.js';
+import { authMiddleware } from '../../common/middleware/auth.middleware.js';
+import { requireProjectRole } from '../../common/middleware/rbac.middleware.js';
 
 export async function membersRoutes(app: FastifyInstance) {
   app.get(
