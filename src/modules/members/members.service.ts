@@ -76,7 +76,7 @@ export async function inviteMember(projectId: string, orgId: string, email: stri
     });
 
     if (existing) {
-      return { message: 'User already in project' };
+      throw new Error('Email already exists in this project');
     }
   }
 
