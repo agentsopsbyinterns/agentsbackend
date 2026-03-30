@@ -17,6 +17,17 @@ export async function createOrganization(userId: string, input: CreateOrgInput) 
 }
 
 export async function createInvite(orgId: string, input: InviteInput & { inviterName: string }) {
+  // 0. Check if user already exists in organization
+  const existingUser = await prisma.user.findFirst({
+    where: { 
+      email: input.email,
+      organizationId: orgId
+    }
+  });
+  if (existingUser) {
+    throw new Error('User already exists in organization');
+  }
+
   const token = generateRandomToken(32);
   const tokenHash = sha256(token);
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days

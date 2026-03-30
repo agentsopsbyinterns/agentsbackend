@@ -11,7 +11,7 @@ export async function createMeeting(orgId: string, input: CreateMeetingInput, cr
   console.log('[meetings] createMeeting: entry', { orgId, input });
   console.log('[meetings] createMeeting: before db save');
   
-  const attendeeEmails = input.attendees || [];
+  const attendeeEmails = Array.from(new Set(input.attendees || [])); // Remove duplicate emails from input
   
   const meeting = await prisma.meeting.create({
     data: {
