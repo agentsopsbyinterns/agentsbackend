@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Chat {
+  id        String   @id @default(cuid())
+  userId    String
+  message   String   @db.LongText
+  response  String   @db.LongText
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model Organization {
   id                     String                  @id @default(cuid())
   name                   String
@@ -43,6 +55,7 @@ model User {
   projectMemberships   ProjectMember[]
   assignedTasks        ProjectTask[]        @relation("TaskAssignee")
   refreshTokens        RefreshToken[]
+  chats                Chat[]
   organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])

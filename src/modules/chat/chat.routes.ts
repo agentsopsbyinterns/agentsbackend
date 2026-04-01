@@ -5,6 +5,8 @@ import { ChatController } from './chat.controller.js';
 export async function chatRoutes(app: FastifyInstance) {
   app.post('/conversations', { preHandler: [authMiddleware] }, ChatController.createConversation);
   app.get('/conversations', { preHandler: [authMiddleware] }, ChatController.listConversations);
+  app.delete('/conversations', { preHandler: [authMiddleware] }, ChatController.clearAllConversations);
+  app.delete('/conversations/:id', { preHandler: [authMiddleware] }, ChatController.deleteConversation);
   app.get('/conversations/:id/messages', { preHandler: [authMiddleware] }, ChatController.listMessages);
   app.post('/conversations/:id/messages', { preHandler: [authMiddleware] }, ChatController.sendMessage);
   app.post('/conversations/:id/ask', { preHandler: [authMiddleware] }, ChatController.ask);

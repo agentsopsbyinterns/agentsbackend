@@ -368,4 +368,65 @@ You are an AI project task intelligence engine.
   return parseJSON(response);
 }
 
+export function buildAIContext(data: { projects: any[]; meetings: any[]; tasks: any[] }, userRole: string) {
+  const { projects, meetings, tasks } = data;
+  
+  const context: any = {
+    projects: projects.map(p => {
+      const projectData: any = {
+        id: p.id,
+        name: p.name,
+        client: p.client,
+        status: p.status,
+        health: p.health,
+        progress: p.progress,
+        dueDate: p.dueDate,
+      };
+
+      // Only add budget if role is ADMIN
+      const role = p.projectRole || userRole;
+      if (role === 'ADMIN') {
+        projectData.budgetTotal = p.budgetTotal;
+        projectData.budgetUsed = p.budgetUsed || p.budget;
+      }
+
+      return projectData;
+    }),
+    recentMeetings: meetings.map(m => ({
+      project: m.project?.name,
+      title: m.title,
+      date: m.scheduledTime,
+      summary: m.extractionJson?.project_summary || "No summary available"
+    })),
+    activeTasks: tasks.map(t => ({
+      project: t.project?.name,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.dueDate
+    }))
+  };
+
+  return JSON.stringify(context, null, 2);
+}
+
+export function buildSystemPrompt(role: string) {
+  const basePrompt = `You are the AgentOps AI Project Assistant. You help team members manage their projects effectively.
+Answer questions accurately based on the provided project context. If you don't know something, say so.`;
+
+  if (role === 'CONTRIBUTOR' || role === 'PROJECT_MANAGER' || role === 'PM') {
+    return `${basePrompt}
+    
+IMPORTANT SECURITY RULES:
+- You are talking to a ${role}.
+- You are strictly FORBIDDEN from revealing any budget or financial information about the project.
+- If the user asks about the budget, costs, expenses, or any financial metrics, you must politely inform them that they do not have access to this information.
+- Focus your answers only on tasks, meetings, progress, and general project details.`;
+  }
+
+  return `${basePrompt}
+  
+You are talking to an ADMIN. You have full access to project details, including budget and financial information.`;
+}
+
 export const callAI = callAIProvider;

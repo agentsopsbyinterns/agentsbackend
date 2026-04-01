@@ -142,7 +142,7 @@ export const ProjectController = {
   meetings: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
-    const items = await listProjectMeetings(request.user.organizationId, id);
+    const items = await listProjectMeetings(id);
     return reply.send({ items });
   },
   createTask: async (request: FastifyRequest, reply: FastifyReply) => {

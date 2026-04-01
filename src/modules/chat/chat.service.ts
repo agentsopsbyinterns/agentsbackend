@@ -1,7 +1,8 @@
 import { prisma } from '../../prisma/client.js';
 import OpenAI from "openai";
 import { env } from "../../config/env.js";
-import { badRequest, notFound } from '../../common/errors/api-error.js';
+import { badRequest, notFound, forbidden } from '../../common/errors/api-error.js';
+import { buildAIContext, buildSystemPrompt } from '../../services/ai.service.js';
 
 export async function createConversation(orgId: string, userId: string) {
   return (prisma as any).conversation.create({
@@ -9,9 +10,9 @@ export async function createConversation(orgId: string, userId: string) {
   });
 }
 
-export async function listConversations(orgId: string) {
+export async function listConversations(userId: string, orgId: string) {
   return (prisma as any).conversation.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: orgId, createdById: userId },
     orderBy: { createdAt: 'desc' }
   });
 }
@@ -27,40 +28,121 @@ export async function createMessage(conversationId: string, userId: string | nul
   return (prisma as any).message.create({ data: { conversationId, userId, role, content } });
 }
 
-export async function askAI(conversationId: string, orgId: string, onChunk: (chunk: string) => void) {
+export async function askAI(conversationId: string, orgId: string, userId: string, onChunk: (chunk: string) => void, projectId?: string) {
   if (!env.OPENAI_API_KEY) {
     throw new Error("AI Assistant is not configured. Please add OPENAI_API_KEY to your environment.");
   }
 
-  const [messages, projects, meetings] = await Promise.all([
-    listMessages(conversationId),
-    (prisma as any).project.findMany({ 
-      where: { organizationId: orgId, deletedAt: null },
-      select: { name: true, client: true, status: true, budgetTotal: true }
+  const messages = await listMessages(conversationId);
+  const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  
+  let systemPrompt = "";
+  let context = "";
+
+  // 1. Fetch ALL projects user belongs to (from /my-projects logic)
+  const memberships = await (prisma as any).projectMember.findMany({
+    where: { userId },
+    include: {
+      project: {
+        include: {
+          _count: { select: { tasks: true } }
+        }
+      }
+    }
+  });
+
+  const allProjects = await Promise.all(memberships.map(async (m: any) => {
+    const p = m.project;
+    const tasksCompleted = await (prisma as any).projectTask.count({
+      where: { projectId: p.id, status: 'COMPLETED' }
+    });
+    const tasksTotal = p._count?.tasks ?? 0;
+    const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+    
+    return {
+      ...p,
+      projectRole: m.projectRole,
+      progress,
+      tasksTotal,
+      tasksCompleted
+    };
+  }));
+
+  // Determine user's primary role for the current context
+  let primaryRole = 'CONTRIBUTOR';
+  if (projectId) {
+    const currentMember = memberships.find((m: any) => m.projectId === projectId);
+    primaryRole = currentMember?.projectRole || 'CONTRIBUTOR';
+  } else if (allProjects.length > 0) {
+    // If no active project, use the most permissive role from their projects
+    const roles = allProjects.map(p => p.projectRole);
+    if (roles.includes('ADMIN')) primaryRole = 'ADMIN';
+    else if (roles.includes('PROJECT_MANAGER')) primaryRole = 'PROJECT_MANAGER';
+  }
+
+  // 2. Fetch recent tasks and meetings across all projects
+  const projectIds = allProjects.map(p => p.id);
+  const [tasks, meetings] = await Promise.all([
+    (prisma as any).projectTask.findMany({
+      where: { projectId: { in: projectIds } },
+      take: 20,
+      orderBy: { dueDate: 'asc' },
+      include: { project: { select: { name: true } } }
     }),
-    (prisma as any).meeting.findMany({ 
-      where: { organizationId: orgId, deletedAt: null }, 
-      take: 5, 
+    (prisma as any).meeting.findMany({
+      where: { projectId: { in: projectIds }, deletedAt: null },
+      take: 10,
       orderBy: { scheduledTime: 'desc' },
-      select: { title: true, scheduledTime: true }
+      include: { project: { select: { name: true } } }
     })
   ]);
 
-  const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  // 3. Guard for budget questions if user is a restricted role
+  const lastMessage = messages[messages.length - 1]?.content.toLowerCase();
+  const isRestrictedRole = primaryRole === 'CONTRIBUTOR' || primaryRole === 'PROJECT_MANAGER' || primaryRole === 'PM';
   
-  const context = `
-You are the AgentOps AI Assistant. You have access to the user's projects and recent meetings.
-Current Projects: ${JSON.stringify(projects.map((p: any) => ({ name: p.name, client: p.client, status: p.status, budget: p.budgetTotal?.toString() || "0" })))}
-Recent Meetings: ${JSON.stringify(meetings.map((m: any) => ({ title: m.title, date: m.scheduledTime })))}
+  if (isRestrictedRole && lastMessage && (lastMessage.includes('budget') || lastMessage.includes('cost') || lastMessage.includes('expense') || lastMessage.includes('money') || lastMessage.includes('price'))) {
+    const accessDenied = "I'm sorry, but you do not have permission to access budget or financial information for your projects.";
+    onChunk(accessDenied);
+    await createMessage(conversationId, null, 'assistant', accessDenied);
+    return;
+  }
 
-Answer the user's questions accurately based on this data. If you don't know something, say so.
-`;
+  // 4. Smart Project Context Handling
+  const projectNames = allProjects.map(p => p.name.toLowerCase());
+  const mentionedProjects = allProjects.filter(p => lastMessage.includes(p.name.toLowerCase()));
+
+  let projectsForContext = allProjects;
+
+  if (mentionedProjects.length === 1) {
+    // If one project is clearly mentioned, focus on it
+    projectsForContext = mentionedProjects;
+    systemPrompt += `\n\nNote: The user is asking about the project: "${mentionedProjects[0].name}".`;
+  } else if (allProjects.length > 1 && mentionedProjects.length === 0 && !projectId) {
+    // If multiple projects exist but none are mentioned, ask for clarification
+    const projectList = allProjects.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+    const clarification = `I can help with that. You are a member of ${allProjects.length} projects:\n${projectList}\n\nWhich project would you like to discuss?`;
+    onChunk(clarification);
+    await createMessage(conversationId, null, 'assistant', clarification);
+    return;
+  }
+
+  // 5. Build Context and System Prompt
+  context = buildAIContext({ projects: projectsForContext, meetings, tasks }, primaryRole);
+  systemPrompt = `${buildSystemPrompt(primaryRole)}\n\nProject Context:\n${context}`;
+
+  if (projectId) {
+    const activeProject = allProjects.find(p => p.id === projectId);
+    if (activeProject) {
+      systemPrompt += `\n\nNote: The user is currently viewing the project: "${activeProject.name}".`;
+    }
+  }
 
   try {
     const response = await openai.chat.completions.create({
       model: env.OPENAI_MODEL || "gpt-4o-mini",
       messages: [
-        { role: "system", content: context },
+        { role: "system", content: systemPrompt },
         ...messages.map((m: any) => ({ 
           role: (m.role === 'assistant' || m.role === 'user' || m.role === 'system') ? m.role : 'user', 
           content: m.content 
@@ -79,8 +161,38 @@ Answer the user's questions accurately based on this data. If you don't know som
     }
 
     await createMessage(conversationId, null, 'assistant', fullContent);
+
+    // Also save to the new Chat model as per user instructions for persistence and isolation
+    try {
+      await (prisma as any).chat.create({
+        data: {
+          userId,
+          message: lastMessage || "",
+          response: fullContent
+        }
+      });
+    } catch (err) {
+      console.error("Failed to save to Chat model:", err);
+    }
   } catch (err: any) {
     console.error("OpenAI Error:", err);
     throw new Error(`AI Request failed: ${err.message || "Unknown error"}`);
   }
+}
+
+export async function deleteConversation(userId: string, conversationId: string) {
+  return (prisma as any).conversation.deleteMany({
+    where: {
+      id: conversationId,
+      createdById: userId
+    }
+  });
+}
+
+export async function clearAllConversations(userId: string) {
+  return (prisma as any).conversation.deleteMany({
+    where: {
+      createdById: userId
+    }
+  });
 }

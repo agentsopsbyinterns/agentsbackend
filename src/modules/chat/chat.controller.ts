@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error.js';
-import { createConversation, createMessage, listConversations, listMessages, askAI } from './chat.service.js';
+import { createConversation, createMessage, listConversations, listMessages, askAI, deleteConversation, clearAllConversations } from './chat.service.js';
 import { createConversationSchema, sendMessageSchema } from './chat.schema.js';
 import { sseInit, sseSend, sseClose } from '../../common/utils/sse.js';
 
@@ -12,8 +12,19 @@ export const ChatController = {
   },
   listConversations: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
-    const conv = await listConversations(request.user.organizationId);
+    const conv = await listConversations(request.user.id, request.user.organizationId);
     return reply.send(conv);
+  },
+  deleteConversation: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    await deleteConversation(request.user.id, id);
+    return reply.send({ success: true });
+  },
+  clearAllConversations: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    await clearAllConversations(request.user.id);
+    return reply.send({ success: true });
   },
   listMessages: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
@@ -32,11 +43,13 @@ export const ChatController = {
   ask: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
+    const { projectId } = request.body as { projectId?: string };
+
     sseInit(reply);
     try {
-      await askAI(id, request.user.organizationId, (chunk) => {
+      await askAI(id, request.user.organizationId, request.user.id, (chunk) => {
         sseSend(reply, { chunk });
-      });
+      }, projectId);
       sseSend(reply, { done: true });
     } catch (err: any) {
       console.error('Chat AI error:', err);

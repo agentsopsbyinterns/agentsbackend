@@ -13,50 +13,25 @@ export const MeetingController = {
     const parsed = createMeetingSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
     try {
-      console.log('[meetings] controller: create entry', { orgId: request.user.organizationId });
-      const m = await createMeeting(request.user.organizationId, parsed.data, request.user.email);
+      console.log('[meetings] controller: create entry', { userId: request.user.id, projectId: parsed.data.projectId });
+      const m = await createMeeting(request.user.id, parsed.data, request.user.email);
       console.log('[meetings] controller: create success', { meetingId: (m as any)?.id });
       return reply.send(m);
     } catch (err: any) {
       console.error('[meetings] controller: create failed', { error: err?.message, stack: err?.stack });
-      // Best-effort fallback: try to persist a minimal meeting instead of failing the request
-      try {
-        const body = parsed.success ? parsed.data : (request.body as any);
-        const scheduled = body?.scheduledTime ? new Date(body.scheduledTime) : new Date();
-        const attendees = Array.isArray(body?.attendees) ? body.attendees : [];
-        const minimal = await (prisma as any).meeting.create({
-          data: {
-            organizationId: request.user.organizationId,
-            title: String(body?.title || 'Untitled Meeting'),
-            agenda: body?.agenda || null,
-            projectId: body?.projectId || null,
-            scheduledTime: scheduled,
-            meetingLink: body?.meetingLink || null,
-            attendees: {
-              create: attendees.map((email: string) => ({
-                email,
-                name: email.split('@')[0],
-              }))
-            }
-          }
-        });
-        console.warn('[meetings] controller: returned minimal meeting due to upstream error');
-        return reply.code(201).send(minimal);
-      } catch (fallbackErr: any) {
-        const msg = String(err?.message || '');
-        if (msg.includes('Google Calendar not connected') || msg.includes('tokens missing')) {
-          return reply.status(400).send({
-            error: 'Google Calendar not connected',
-            message: 'Please connect Google Calendar for this workspace',
-            code: 'GOOGLE_NOT_CONNECTED'
-          });
-        }
-        return reply.status(500).send({
-          error: 'Meeting creation failed',
-          message: fallbackErr?.message || err?.message,
-          code: 'MEETING_CREATE_FAILED'
+      const msg = String(err?.message || '');
+      if (msg.includes('Google Calendar not connected') || msg.includes('tokens missing')) {
+        return reply.status(400).send({
+          error: 'Google Calendar not connected',
+          message: 'Please connect Google Calendar for this workspace',
+          code: 'GOOGLE_NOT_CONNECTED'
         });
       }
+      return reply.status(500).send({
+        error: 'Meeting creation failed',
+        message: err?.message,
+        code: 'MEETING_CREATE_FAILED'
+      });
     }
   },
   list: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -69,13 +44,13 @@ export const MeetingController = {
     const endDate = typeof q?.endDate === 'string' && q.endDate.trim() ? q.endDate : undefined;
     const search = typeof q?.search === 'string' && q.search.trim() ? q.search : undefined;
     
-    const { items, total } = await listMeetings(request.user.organizationId, skip, take, projectId, status, startDate, endDate, search);
+    const { items, total } = await listMeetings(request.user.id, skip, take, projectId, status, startDate, endDate, search);
     return reply.send({ page, pageSize, total, items });
   },
   get: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
-    const m = await getMeeting(request.user.organizationId, id);
+    const m = await getMeeting(request.user.id, id);
     if (!m) return reply.status(404).send({ error: 'Not found' });
     return reply.send(m);
   },
@@ -92,7 +67,7 @@ export const MeetingController = {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
     
-    const existing = await getMeeting(request.user.organizationId, id);
+    const existing = await getMeeting(request.user.id, id);
     if (!existing) {
       return reply.status(404).send({ error: 'Meeting not found' });
     }
@@ -136,7 +111,7 @@ export const MeetingController = {
   review: async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) throw unauthorized();
     const id = (request.params as any).id;
-    const existing = await getMeeting(request.user.organizationId, id);
+    const existing = await getMeeting(request.user.id, id);
     if (!existing) return reply.status(404).send({ error: 'Not found' });
     const parsed = reviewSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });

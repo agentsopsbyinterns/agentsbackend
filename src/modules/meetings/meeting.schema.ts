@@ -5,7 +5,7 @@ export const createMeetingSchema = z.object({
   agenda: z.string().optional(),
   scheduledTime: z.string().transform((v) => new Date(v)),
   meetingLink: z.string().url().optional(),
-  projectId: z.string().optional(),
+  projectId: z.string().min(1, "projectId required"),
   attendees: z.array(z.string().email()).optional()
 });
 

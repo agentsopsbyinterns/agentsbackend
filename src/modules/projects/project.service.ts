@@ -4,6 +4,17 @@ import { mapLegacyRole, PROJECT_ROLES } from '../../common/utils/roles.js';
 import { mergeProjectData, detectTaskChanges } from '../../services/ai.service.js';
 import { badRequest, notFound, forbidden } from '../../common/errors/api-error.js';
 
+function sanitizeProject(project: any, role: string) {
+  if (role === 'CONTRIBUTOR') {
+    const sanitized = { ...project };
+    delete sanitized.budget;
+    delete sanitized.budgetTotal;
+    delete sanitized.remainingBudget;
+    return sanitized;
+  }
+  return project;
+}
+
 export async function listProjects(orgId: string, skip: number, take: number, filters?: { search?: string; health?: string; status?: string; client?: string; assignedToMe?: boolean; userId?: string }) {
   const where: any = { 
     organizationId: orgId, 
@@ -91,7 +102,7 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
        userRole = membership?.projectRole || null;
      }
 
-     return {
+     return sanitizeProject({
        ...p,
        id: p.id,
        projectId: p.id, // Included for compatibility with requested example
@@ -106,7 +117,7 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
        tasksCompleted,
        asanaLink: p.asanaLink,
        updatedAt: p.updatedAt
-     };
+     }, userRole || 'CONTRIBUTOR');
    }));
 
   return { items: enrichedItems, total };
@@ -121,7 +132,7 @@ export async function getProject(orgId: string, id: string, userId?: string) {
       include: { _count: { select: { tasks: true } } }
     });
     if (!project) throw notFound('Project not found');
-    return project; 
+    return sanitizeProject(project, 'CONTRIBUTOR'); 
   }
 
   const membership = await (prisma as any).projectMember.findUnique({
@@ -163,7 +174,7 @@ export async function getProject(orgId: string, id: string, userId?: string) {
   const tasksTotal = project._count?.tasks ?? 0;
   const progress = tasksTotal > 0 ? Math.round(((tasksCompleted + (tasksInProgress * 0.5)) / tasksTotal) * 100) : 0;
 
-  const result = {
+  const result = sanitizeProject({
     ...project,
     id: project.id,
     name: project.name,
@@ -174,7 +185,7 @@ export async function getProject(orgId: string, id: string, userId?: string) {
     budget: budgetInfo?.used ?? 0,
     budgetTotal: budgetInfo?.budget ?? 0,
     remainingBudget: budgetInfo?.remaining ?? 0,
-  };
+  }, userRole || 'CONTRIBUTOR');
 
   if (!result.id || !result.name || !result.projectRole) {
     console.error(`[GET PROJECT] Result object missing required fields for project ${id}`);
@@ -200,9 +211,9 @@ export async function projectMetrics(projectId: string) {
   return { total, done };
 }
 
-export async function listProjectMeetings(orgId: string, projectId: string) {
+export async function listProjectMeetings(projectId: string) {
   return (prisma as any).meeting.findMany({
-    where: { organizationId: orgId, projectId, deletedAt: null },
+    where: { projectId, deletedAt: null },
     orderBy: { scheduledTime: 'desc' }
   });
 }
@@ -214,7 +225,8 @@ export async function listProjectMembers(projectId: string) {
   });
   return {
     items: members.map((m: any) => ({
-      id: m.userId,
+      id: m.id, // Use the projectMember ID
+      userId: m.userId,
       email: m.user.email,
       name: m.user.name,
       projectRole: m.projectRole,
@@ -416,7 +428,7 @@ export async function listMyProjects(userId: string) {
     const tasksTotal = p._count?.tasks ?? 0;
     const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
 
-    return {
+    return sanitizeProject({
       id: p.id,
       projectId: p.id,
       name: p.name,
@@ -430,7 +442,7 @@ export async function listMyProjects(userId: string) {
       tasksCompleted,
       asanaLink: p.asanaLink,
       updatedAt: p.updatedAt
-    };
+    }, m.projectRole);
   }));
 
   return enrichedItems;
@@ -592,8 +604,17 @@ export async function updateProjectMemberRole(projectId: string, memberId: strin
 }
 
 export async function deleteProjectMember(projectId: string, memberId: string) {
+  // Ensure the member belongs to the project before deleting
+  const member = await (prisma as any).projectMember.findFirst({
+    where: { id: memberId, projectId: projectId }
+  });
+
+  if (!member) {
+    throw notFound('Project member not found');
+  }
+
   return (prisma as any).projectMember.delete({
-    where: { userId_projectId: { userId: memberId, projectId } }
+    where: { id: memberId }
   });
 }
 
