@@ -120,6 +120,15 @@ app.get('/logout', (req, res) => {
   });
 });
 
+// ✅ ADD THIS 👇
+app.get("/privacy", (req, res) => {
+  res.send("Privacy Policy");
+});
+
+app.get("/terms", (req, res) => {
+  res.send("Terms and Conditions");
+});
+
 // Start server
 app.listen(PORT, async () => {
   await testConnection();
