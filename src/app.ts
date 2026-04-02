@@ -148,21 +148,7 @@ export async function buildApp() {
     });
   });
 
-  app.get('/privacy', async (request, reply) => {
-  return {
-    message: 'Privacy Policy',
-    app: 'AgentOps',
-    note: 'We respect user privacy.'
-  };
-});
-
-app.get('/terms', async (request, reply) => {
-  return {
-    message: 'Terms & Conditions',
-    app: 'AgentOps',
-    note: 'Use responsibly.'
-  };
-});
+  
 
   // Temporary chat test endpoint
   app.post('/chat', async (request, reply) => {
