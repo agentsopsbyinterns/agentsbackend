@@ -19,9 +19,23 @@ import { searchRoutes } from './modules/search/search.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { idempotencyMiddleware } from './common/middleware/idempotency.middleware.js';
+import fastifyStatic from '@fastify/static';
+import fastifyMultipart from '@fastify/multipart';
+import path from 'path';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
+
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+    },
+  });
+
+  await app.register(fastifyStatic, {
+    root: path.join(process.cwd(), 'uploads'),
+    prefix: '/uploads/',
+  });
 
   await app.register(cookie, { secret: undefined, hook: 'onRequest' });
   await app.register(rateLimit, { max: env.RATE_LIMIT_MAX, timeWindow: env.RATE_LIMIT_TIME_WINDOW });
