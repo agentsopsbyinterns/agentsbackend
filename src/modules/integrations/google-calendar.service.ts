@@ -153,30 +153,18 @@ export async function createEvent(orgId: string, calendarId: string, event: any)
   setClientCredentials(oauth2Client, tokens);
   const calendar = (google as any).calendar({ version: 'v3', auth: oauth2Client });
   try {
-    const res1 = await calendar.events.insert({
+    const res = await calendar.events.insert({
       calendarId,
-      requestBody: event
+      requestBody: event,
+      conferenceDataVersion: 1
     });
-    return res1.data;
+    return res.data;
   } catch (err: any) {
-    const msg1 = String(err?.message || '');
-    const code1 = String((err as any)?.code || '');
-    const details1 = (err as any)?.errors || (err as any)?.response?.data || null;
-    console.error('[google] events.insert basic failed', { code: code1, msg: msg1, details: details1 });
-    try {
-      const res2 = await calendar.events.insert({
-        calendarId,
-        requestBody: event,
-        conferenceDataVersion: 1
-      });
-      return res2.data;
-    } catch (err2: any) {
-      const msg2 = String(err2?.message || '');
-      const code2 = String((err2 as any)?.code || '');
-      const details2 = (err2 as any)?.errors || (err2 as any)?.response?.data || null;
-      console.error('[google] events.insert with conferenceData failed', { code: code2, msg: msg2, details: details2 });
-      throw new Error(`Google events.insert failed: ${msg2 || msg1}`);
-    }
+    const msg = String(err?.message || '');
+    const code = String((err as any)?.code || '');
+    const details = (err as any)?.errors || (err as any)?.response?.data || null;
+    console.error('[google] events.insert failed', { code, msg, details });
+    throw new Error(`Google events.insert failed: ${msg}`);
   }
 }
 

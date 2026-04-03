@@ -196,3 +196,104 @@ export async function clearAllConversations(userId: string) {
     }
   });
 }
+
+export async function listTeamChatMessages(projectId: string, userId: string) {
+  const member = await (prisma as any).projectMember.findFirst({
+    where: { projectId, userId }
+  });
+  if (!member) throw forbidden('You are not a member of this project');
+
+  const messages = await (prisma as any).teamChatMessage.findMany({
+    where: { projectId },
+    orderBy: { createdAt: 'asc' },
+    include: { sender: { select: { id: true, name: true, avatarUrl: true } } }
+  });
+
+  // Filter and mask messages
+  return messages
+    .filter((msg: any) => {
+      const deletedBy = Array.isArray(msg.deletedBy) ? msg.deletedBy : [];
+      return !deletedBy.includes(userId);
+    })
+    .map((msg: any) => {
+      if (msg.isDeleted) {
+        return {
+          ...msg,
+          content: "This message was deleted",
+          attachments: []
+        };
+      }
+      return msg;
+    });
+}
+
+export async function createTeamChatMessage(projectId: string, userId: string, content: string, attachments?: any[]) {
+  const member = await (prisma as any).projectMember.findFirst({
+    where: { projectId, userId }
+  });
+  if (!member) throw forbidden('You are not a member of this project');
+
+  return (prisma as any).teamChatMessage.create({
+    data: { 
+      projectId, 
+      senderId: userId, 
+      content, 
+      deletedBy: [],
+      attachments: attachments || []
+    },
+    include: { sender: { select: { id: true, name: true, avatarUrl: true } } }
+  });
+}
+
+export async function updateTeamChatMessage(messageId: string, userId: string, content: string) {
+  const msg = await (prisma as any).teamChatMessage.findUnique({ where: { id: messageId } });
+  if (!msg) throw notFound('Message not found');
+  if (msg.senderId !== userId) throw forbidden('Only the sender can edit this message');
+  if (msg.isDeleted) throw badRequest('Cannot edit a deleted message');
+
+  return (prisma as any).teamChatMessage.update({
+    where: { id: messageId },
+    data: { content, isEdited: true },
+    include: { sender: { select: { id: true, name: true, avatarUrl: true } } }
+  });
+}
+
+export async function softDeleteTeamChatMessage(messageId: string, userId: string) {
+  const msg = await (prisma as any).teamChatMessage.findUnique({ where: { id: messageId } });
+  if (!msg) throw notFound('Message not found');
+
+  // Check if user is part of the project
+  const member = await (prisma as any).projectMember.findFirst({
+    where: { projectId: msg.projectId, userId }
+  });
+  if (!member) throw forbidden('You are not a member of this project');
+
+  const currentDeletedBy = Array.isArray(msg.deletedBy) ? msg.deletedBy : [];
+  if (!currentDeletedBy.includes(userId)) {
+    currentDeletedBy.push(userId);
+  }
+
+  return (prisma as any).teamChatMessage.update({
+    where: { id: messageId },
+    data: { deletedBy: currentDeletedBy }
+  });
+}
+
+export async function globalDeleteTeamChatMessage(messageId: string, userId: string) {
+  const msg = await (prisma as any).teamChatMessage.findUnique({ where: { id: messageId } });
+  if (!msg) throw notFound('Message not found');
+
+  // 🔥 IMPORTANT: Authorization check
+  if (msg.senderId !== userId) {
+    throw forbidden('You can only delete your own message');
+  }
+
+  return (prisma as any).teamChatMessage.update({
+    where: { id: messageId },
+    data: { 
+      isDeleted: true,
+      deletedAt: new Date(),
+      globalDeletedBy: userId
+    }
+  });
+}
