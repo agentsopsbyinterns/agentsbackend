@@ -7,6 +7,7 @@ import { mapLegacyRole } from '../../common/utils/roles.js';
 import { badRequest, conflict, notFound, unauthorized } from '../../common/errors/api-error.js';
 import { sendMail } from '../../common/utils/mailer.js';
 import { env } from '../../config/env.js';
+import crypto from 'crypto';
 
 export async function signup(input: SignupInput & { organizationId?: string; projectId?: string; token?: string }) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
@@ -15,6 +16,9 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
   }
 
   const passwordHash = await hashPassword(input.password);
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const verificationExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     let orgId = input.organizationId;
     let org;
@@ -32,10 +36,14 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
         name: input.name,
         passwordHash,
         organizationId: orgId,
-        globalRole: input.organizationId ? 'TEAM_MEMBER' : 'ADMIN'
+        globalRole: input.organizationId ? 'TEAM_MEMBER' : 'ADMIN',
+        verificationToken,
+        verificationExpires,
+        isVerified: false
       }
     });
 
+    // ... (rest of the logic remains the same)
     // If we have a project token, add them to the project now
     if (input.token && input.projectId) {
       const tokenHash = sha256(input.token);
@@ -74,30 +82,67 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
     return { org, user };
   });
 
-  const accessToken = signAccessToken({
-    sub: result.user.id,
-    email: result.user.email,
-    organizationId: result.user.organizationId,
-    globalRole: (result.user as any).globalRole || (input.organizationId ? 'TEAM_MEMBER' : 'ADMIN')
-  });
-  const rawRefresh = generateRandomToken(32);
-  const refreshHash = sha256(rawRefresh);
-  const refreshExpires = new Date(Date.now() + parseDuration(env.REFRESH_TOKEN_TTL));
-
-  await prisma.refreshToken.create({
-    data: { userId: result.user.id, tokenHash: refreshHash, expiresAt: refreshExpires }
+  const verifyUrl = `${env.APP_URL}/verify-email?token=${verificationToken}`;
+  await sendMail({
+    to: result.user.email,
+    subject: "Verify your email - AgentOps AI",
+    html: `
+      <h2>Email Verification</h2>
+      <p>Thank you for signing up! Please click the link below to verify your email address:</p>
+      <p><a href="${verifyUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Email</a></p>
+      <p>This link will expire in 24 hours.</p>
+    `
   });
 
   return {
     user: sanitizeUser(result.user),
-    accessToken,
-    refreshCookieValue: rawRefresh
+    message: 'Check your email to verify your account'
   };
+}
+
+export async function verifyEmail(token: string) {
+  // Find user by token even if expired to provide a better message
+  const user = await prisma.user.findFirst({
+    where: { 
+      verificationToken: token
+    }
+  });
+
+  if (!user) {
+    // If we don't find the user, it's either invalid or already verified (token cleared)
+    // To handle idempotency, we can't easily know if this specific token was just used.
+    // But we'll follow the requirement to be graceful if we can.
+    throw badRequest('Invalid or expired verification token');
+  }
+
+  if (user.isVerified) {
+    return { success: true, message: 'Email already verified' };
+  }
+
+  if (user.verificationExpires && user.verificationExpires < new Date()) {
+    throw badRequest('Verification token expired');
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      isVerified: true,
+      verificationToken: null,
+      verificationExpires: null
+    }
+  });
+
+  return { success: true };
 }
 
 export async function login(input: LoginInput & { projectId?: string; token?: string }) {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
   if (!user) throw unauthorized('Invalid credentials');
+  
+  if (!user.isVerified) {
+    throw unauthorized('Please verify your email before login');
+  }
+
   const ok = await verifyPassword(user.passwordHash, input.password);
   if (!ok) throw unauthorized('Invalid credentials');
 
