@@ -44,8 +44,8 @@ model User {
   deletedAt            DateTime?
   globalRole           GlobalRole           @default(ADMIN)
   isVerified           Boolean              @default(false)
-  verificationExpires  DateTime?
   verificationToken    String?
+  verificationExpires  DateTime?
   apiKeys              ApiKey[]
   attendees            Attendee[]
   auditLogs            AuditLog[]

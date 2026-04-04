@@ -9,6 +9,7 @@ import { prisma } from '../../prisma/client.js';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/signup', AuthController.signup);
+  app.get('/auth/verify-email', AuthController.verifyEmail);
   app.post('/auth/login', AuthController.login);
   app.post('/auth/logout', { preHandler: authMiddleware }, AuthController.logout);
   app.post('/auth/refresh', AuthController.refresh);

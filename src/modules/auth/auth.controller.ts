@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { env, isProd } from '../../config/env.js';
-import { forgotPassword, login, me, refresh, resetPassword, signup, logout } from './auth.service.js';
+import { forgotPassword, login, me, refresh, resetPassword, signup, logout, verifyEmail } from './auth.service.js';
 import { forgotPasswordSchema, loginSchema, resetPasswordSchema, signupSchema, logoutSchema } from './auth.schema.js';
 import { unauthorized } from '../../common/errors/api-error.js';
 
@@ -36,11 +36,24 @@ export const AuthController = {
         projectId: body.projectId,
         token: body.token
       });
-      setRefreshCookie(reply, result.refreshCookieValue);
-      return reply.send({ user: result.user, accessToken: result.accessToken });
+      // Verification logic: Do NOT set refresh cookie yet, as they are not logged in
+      return reply.send({ user: result.user, message: result.message });
     } catch (err: any) {
       console.error('Signup error:', err);
       return reply.status(err.status || 500).send({ error: err.message || 'Signup failed' });
+    }
+  },
+  verifyEmail: async (request: FastifyRequest, reply: FastifyReply) => {
+    const { token } = request.query as { token: string };
+    if (!token) {
+      return reply.status(400).send({ error: 'Verification token is required' });
+    }
+    try {
+      await verifyEmail(token);
+      return reply.send({ success: true, message: 'Email verified successfully' });
+    } catch (err: any) {
+      console.error('Email verification error:', err);
+      return reply.status(err.status || 400).send({ error: err.message || 'Email verification failed' });
     }
   },
   login: async (request: FastifyRequest, reply: FastifyReply) => {
