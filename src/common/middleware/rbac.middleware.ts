@@ -8,36 +8,60 @@ export function rbacMiddleware(roles: Array<ProjectRole>) {
     if (!request.user) throw unauthorized();
 
     const params = request.params as any;
-    const projectId = params.projectId || params.id;
+    let projectId: string | undefined;
+
+    // Resolve projectId from meetingId if this is a meeting route
+    const isMeetingRoute = request.routerPath?.includes('/meetings/');
+    if (isMeetingRoute && params.id) {
+      const meeting = await (prisma as any).meeting.findUnique({
+        where: { id: params.id },
+        select: { projectId: true }
+      });
+      if (!meeting) {
+        throw forbidden('Meeting not found');
+      }
+      projectId = meeting.projectId;
+    } else {
+      projectId = params.projectId || params.id;
+    }
     
     // Default to a restricted role if no membership found
     let userRole: ProjectRole = PROJECT_ROLES.CONTRIBUTOR;
 
     // If we have a project context, always prefer the project-specific role
     if (projectId && typeof projectId === 'string') {
-      const membership = await (prisma as any).projectMember.findUnique({
-        where: { userId_projectId: { userId: request.user.id, projectId } }
-      });
+      const [membership, project] = await Promise.all([
+        (prisma as any).projectMember.findUnique({
+          where: { userId_projectId: { userId: request.user.id, projectId } }
+        }),
+        (prisma as any).project.findUnique({
+          where: { id: projectId },
+          select: { createdById: true }
+        })
+      ]);
+
+      const globalRole = (request.user as any).globalRole;
+      const normalizedGlobal = mapLegacyRole(globalRole);
+      const isOwner = project?.createdById === request.user.id;
+
       if (membership) {
         userRole = mapLegacyRole(membership.projectRole);
-        // Requirement 10: Log role resolution
         console.log(`[RBAC] Resolved project role for user ${request.user.id} on project ${projectId}: ${userRole}`);
+      } else if (normalizedGlobal === PROJECT_ROLES.ADMIN) {
+        // Global admin bypass
+        console.log(`[RBAC] Global ADMIN access granted for user ${request.user.id} on project ${projectId}`);
+        return;
+      } else if (isOwner) {
+        // Project owner (creator) bypass - give them ADMIN access on their project
+        userRole = PROJECT_ROLES.ADMIN;
+        console.log(`[RBAC] Project OWNER access granted for user ${request.user.id} on project ${projectId}`);
       } else {
-        // Check if global admin (bypasses membership requirement for most actions)
-        const globalRole = (request.user as any).globalRole;
-        const normalizedGlobal = mapLegacyRole(globalRole);
-        if (normalizedGlobal === PROJECT_ROLES.ADMIN) {
-          // Requirement 10: Log role resolution
-          console.log(`[RBAC] Global ADMIN access granted for user ${request.user.id} on project ${projectId}`);
-          return;
-        }
         throw forbidden('You are not a member of this project');
       }
     } else {
       // Global actions fallback to global role
       const globalRole = (request.user as any).globalRole;
       userRole = mapLegacyRole(globalRole);
-      // Requirement 10: Log role resolution
       console.log(`[RBAC] Resolved global role for user ${request.user.id}: ${userRole}`);
     }
 
@@ -66,17 +90,23 @@ export function requireProjectRole(allowedRoles: Array<ProjectRole>) {
       throw unauthorized();
     }
 
-    // Global admins bypass project-level checks
-    const globalRole = (request.user as any).globalRole;
-    const normalizedGlobal = mapLegacyRole(globalRole);
-    if (normalizedGlobal === PROJECT_ROLES.ADMIN) {
-      console.log(`[RBAC] Global ADMIN access granted for user ${request.user.id}`);
-      return;
-    }
-
-    // Extract projectId from various possible param names
     const params = request.params as any;
-    const projectId = params.projectId || params.id;
+    let projectId: string | undefined;
+
+    // Resolve projectId from meetingId if this is a meeting route
+    const isMeetingRoute = request.routerPath?.includes('/meetings/');
+    if (isMeetingRoute && params.id) {
+      const meeting = await (prisma as any).meeting.findUnique({
+        where: { id: params.id },
+        select: { projectId: true }
+      });
+      if (!meeting) {
+        throw forbidden('Meeting not found');
+      }
+      projectId = meeting.projectId;
+    } else {
+      projectId = params.projectId || params.id;
+    }
 
     if (!projectId) {
       console.error('[RBAC] projectId missing in request params');
@@ -86,14 +116,29 @@ export function requireProjectRole(allowedRoles: Array<ProjectRole>) {
     const userId = request.user.id;
 
     // Check membership and role in ProjectMember table
-    const membership = await (prisma as any).projectMember.findUnique({
-      where: {
-        userId_projectId: {
-          userId,
-          projectId
-        }
-      }
-    });
+    const [membership, project] = await Promise.all([
+      (prisma as any).projectMember.findUnique({
+        where: { userId_projectId: { userId, projectId } }
+      }),
+      (prisma as any).project.findUnique({
+        where: { id: projectId },
+        select: { createdById: true }
+      })
+    ]);
+
+    const globalRole = (request.user as any).globalRole;
+    const normalizedGlobal = mapLegacyRole(globalRole);
+    const isOwner = project?.createdById === userId;
+
+    if (normalizedGlobal === PROJECT_ROLES.ADMIN) {
+      console.log(`[RBAC] Global ADMIN access granted for user ${userId}`);
+      return;
+    }
+
+    if (isOwner) {
+      console.log(`[RBAC] Project OWNER access granted for user ${userId} on project ${projectId}`);
+      return;
+    }
 
     const projectRole = mapLegacyRole(membership?.projectRole);
 

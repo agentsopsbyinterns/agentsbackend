@@ -232,15 +232,10 @@ export const MeetingController = {
       return reply.send({ success: true, extraction: extractionData });
     } catch (err: any) {
       console.error("[manualTranscript] DB update failed:", err);
-      // Fallback: Save just the raw transcript if extraction storage fails
-      await (prisma as any).meeting.update({
-        where: { id },
-        data: { 
-          rawTranscript: raw,
-          transcriptStatus: 'completed'
-        }
+      return reply.status(500).send({ 
+        error: "Database update failed", 
+        message: err.message || "Failed to save transcript and extraction data." 
       });
-      return reply.send({ success: true, error: "Extraction failed to save but transcript was stored." });
     }
   },
   uploadRecording: async (request: FastifyRequest, reply: FastifyReply) => {
