@@ -4,7 +4,7 @@ export const signupSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
-  organizationName: z.string().min(1)
+  organizationName: z.string().min(1).optional()
 });
 
 export const loginSchema = z.object({

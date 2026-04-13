@@ -57,9 +57,45 @@ model User {
   assignedTasks        ProjectTask[]        @relation("TaskAssignee")
   refreshTokens        RefreshToken[]
   teamChatMessages     TeamChatMessage[]
+  readReceipts         ChatReadReceipt[]
+  dmSent               DirectMessage[]      @relation("DMSent")
+  dmReceived           DirectMessage[]      @relation("DMReceived")
+  conversations        Conversation[]       @relation("ConversationParticipants")
   organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
+}
+
+model ChatReadReceipt {
+  id             String   @id @default(cuid())
+  userId         String
+  projectId      String?  // For team chats
+  targetUserId   String?  // For direct chats
+  lastReadAt     DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@unique([userId, targetUserId])
+  @@index([userId])
+}
+
+model DirectMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String   @db.LongText
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+  isEdited   Boolean  @default(false)
+  isDeleted  Boolean  @default(false)
+  deletedAt  DateTime?
+  attachments Json?    // Array of {url, type, name}
+
+  sender   User @relation("DMSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("DMReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
 }
 
 model PasswordResetToken {
@@ -278,13 +314,17 @@ model Conversation {
   id             String       @id @default(cuid())
   organizationId String
   createdById    String
+  type           ConversationType @default(AI)
+  projectId      String?
   createdAt      DateTime     @default(now())
   createdBy      User         @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages       Message[]
+  participants   User[]       @relation("ConversationParticipants")
 
   @@index([organizationId])
   @@index([createdById])
+  @@index([projectId])
 }
 
 model Message {
@@ -393,6 +433,12 @@ model TeamChatMessage {
 
   @@index([projectId])
   @@index([senderId])
+}
+
+enum ConversationType {
+  AI
+  DIRECT
+  PROJECT
 }
 
 enum InviteStatus {

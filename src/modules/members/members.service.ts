@@ -313,7 +313,12 @@ export async function acceptProjectInvite(token: string, userId?: string) {
           joinedAt: new Date()
         }
       }),
-      // 2. Mark project invite as accepted
+      // 2. Update user's organizationId to match the project's organization
+      (prisma as any).user.update({
+        where: { id: userId },
+        data: { organizationId: invite.organizationId }
+      }),
+      // 3. Mark project invite as accepted
       (prisma as any).projectInvite.update({
         where: { id: invite.id },
         data: { status: InviteStatus.ACCEPTED }

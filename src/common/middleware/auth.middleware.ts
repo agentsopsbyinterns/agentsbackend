@@ -20,6 +20,8 @@ export async function authMiddleware(request: FastifyRequest, _reply: FastifyRep
       globalRole?: 'SUPER_ADMIN' | 'ADMIN' | 'TEAM_MEMBER';
     };
 
+    console.log(`[AuthMiddleware] Token verified for user: ${decoded.email} (${decoded.sub})`);
+
     const incomingGlobal = decoded.globalRole as any;
     const mappedGlobal: 'ADMIN' | 'TEAM_MEMBER' | undefined =
       incomingGlobal === 'SUPER_ADMIN'
@@ -38,7 +40,14 @@ export async function authMiddleware(request: FastifyRequest, _reply: FastifyRep
     };
 
     request.organizationId = decoded.organizationId;
-  } catch {
+  } catch (err: any) {
+    if (err.name === 'TokenExpiredError') {
+      console.warn('[AuthMiddleware] JWT Token Expired');
+    } else if (err.name === 'JsonWebTokenError') {
+      console.warn(`[AuthMiddleware] JWT Token Invalid: ${err.message}`);
+    } else {
+      console.error(`[AuthMiddleware] Auth Error: ${err.message}`);
+    }
     throw unauthorized();
   }
 }
