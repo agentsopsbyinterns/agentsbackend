@@ -22,9 +22,13 @@ import { idempotencyMiddleware } from './common/middleware/idempotency.middlewar
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
 import path from 'path';
+import { setupSocketIO } from './common/utils/socket.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
+
+  // Setup Socket.IO
+  setupSocketIO(app);
 
   await app.register(fastifyMultipart, {
     limits: {

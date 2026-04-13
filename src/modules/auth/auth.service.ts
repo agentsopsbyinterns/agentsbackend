@@ -21,8 +21,25 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     let orgId = input.organizationId;
+    let invite = null;
+
+    // If a token is provided, prioritize the organization from the invite
+    if (input.token) {
+      const tokenHash = sha256(input.token);
+      invite = await (tx.projectInvite as any).findUnique({ where: { tokenHash } });
+      
+      if (!invite || invite.status !== InviteStatus.PENDING || invite.expiresAt < new Date()) {
+        throw badRequest('Invalid or expired invitation token');
+      }
+      
+      orgId = invite.organizationId;
+    }
+
     let org;
     if (!orgId) {
+      if (!input.organizationName) {
+        throw badRequest('Organization name is required for standard signup');
+      }
       org = await tx.organization.create({ data: { name: input.organizationName } });
       orgId = org.id;
     } else {
@@ -36,47 +53,36 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
         name: input.name,
         passwordHash,
         organizationId: orgId,
-        globalRole: input.organizationId ? 'TEAM_MEMBER' : 'ADMIN',
+        globalRole: orgId ? 'TEAM_MEMBER' : 'ADMIN',
         verificationToken,
         verificationExpires,
         isVerified: false
       }
     });
 
-    // ... (rest of the logic remains the same)
-    // If we have a project token, add them to the project now
-    if (input.token && input.projectId) {
-      const tokenHash = sha256(input.token);
-      console.log(`[signup/new] Checking tokenHash: ${tokenHash} for project: ${input.projectId}`);
-      const invite = await (tx.projectInvite as any).findUnique({ where: { tokenHash } });
+    // If we have a valid invite, handle project membership and mark as accepted
+    if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date()) {
+      const projectRole = mapLegacyRole(invite.projectRole || 'CONTRIBUTOR');
       
-      if (invite && invite.status === InviteStatus.PENDING && invite.expiresAt > new Date()) {
-         // Verify it's for this project (unless it's an org invite where projectId is null)
-         if (!invite.projectId || invite.projectId === input.projectId) {
-           const projectRole = mapLegacyRole(invite.projectRole || 'CONTRIBUTOR');
-           console.log(`[signup/new] Adding user ${user.id} to project ${invite.projectId || 'org'} with role ${projectRole}`);
-           
-           if (invite.projectId) {
-             await (tx.projectMember as any).upsert({
-               where: { userId_projectId: { userId: user.id, projectId: invite.projectId } },
-               update: { projectRole },
-               create: {
-                 userId: user.id,
-                 projectId: invite.projectId,
-                 projectRole,
-                 joinedAt: new Date()
-               }
-             });
-           }
-           
-           await (tx.projectInvite as any).update({ 
-             where: { id: invite.id }, 
-             data: { 
-               status: InviteStatus.ACCEPTED
-             } 
-           });
-         }
+      if (invite.projectId) {
+        await (tx.projectMember as any).upsert({
+          where: { userId_projectId: { userId: user.id, projectId: invite.projectId } },
+          update: { projectRole },
+          create: {
+            userId: user.id,
+            projectId: invite.projectId,
+            projectRole,
+            joinedAt: new Date()
+          }
+        });
       }
+      
+      await (tx.projectInvite as any).update({ 
+        where: { id: invite.id }, 
+        data: { 
+          status: InviteStatus.ACCEPTED
+        } 
+      });
     }
 
     return { org, user };
