@@ -2,8 +2,8 @@ import { prisma } from '../../prisma/client.js';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { unauthorized } from '../../common/errors/api-error.js';
 import { getPagination } from '../../common/utils/pagination.js';
-import { createMeetingSchema, rescheduleSchema, reviewSchema } from './meeting.schema.js';
-import { createMeeting, deleteMeeting, getMeeting, inviteBot, listMeetings, meetingInsights, meetingTimeline, meetingTranscript, rescheduleMeeting, updateActionItem, createReview, saveRecordingAndExtract } from './meeting.service.js';
+import { createMeetingSchema, rescheduleSchema, reviewSchema, addAttendeeSchema } from './meeting.schema.js';
+import { createMeeting, deleteMeeting, getMeeting, inviteBot, listMeetings, meetingInsights, meetingTimeline, meetingTranscript, rescheduleMeeting, updateActionItem, createReview, saveRecordingAndExtract, addAttendee, expireMeeting } from './meeting.service.js';
 import { cleanTranscript, extractMeetingData } from '../../services/ai.service.js';
 import { z } from 'zod';
 
@@ -92,6 +92,24 @@ export const MeetingController = {
     const id = (request.params as any).id;
     const m = await inviteBot(request.user.organizationId, id);
     return reply.send(m);
+  },
+  expire: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const m = await expireMeeting(request.user.organizationId, id);
+    return reply.send(m);
+  },
+  addAttendee: async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) throw unauthorized();
+    const id = (request.params as any).id;
+    const parsed = addAttendeeSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
+    try {
+      const item = await addAttendee(request.user.organizationId, id, parsed.data.email);
+      return reply.send(item);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err?.message || 'Failed to add attendee' });
+    }
   },
   timeline: async (request: FastifyRequest, reply: FastifyReply) => {
     const id = (request.params as any).id;

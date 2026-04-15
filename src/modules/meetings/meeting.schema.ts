@@ -20,6 +20,11 @@ export const reviewSchema = z.object({
   dueDate: z.string().optional()
 });
 
+export const addAttendeeSchema = z.object({
+  email: z.string().email()
+});
+
 export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;
 export type RescheduleInput = z.infer<typeof rescheduleSchema>;
 export type ReviewInput = z.infer<typeof reviewSchema>;
+export type AddAttendeeInput = z.infer<typeof addAttendeeSchema>;

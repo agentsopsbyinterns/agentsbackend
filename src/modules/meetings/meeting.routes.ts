@@ -10,6 +10,8 @@ export async function meetingRoutes(app: FastifyInstance) {
   app.get('/meetings/:id/tasks', { preHandler: [authMiddleware] }, MeetingController.tasks);
   app.patch('/api/meetings/:id/reschedule', { preHandler: [authMiddleware, rbacMiddleware(['ADMIN','PROJECT_MANAGER'])] }, MeetingController.reschedule);
   app.post('/meetings/:id/invite-bot', { preHandler: [authMiddleware, rbacMiddleware(['ADMIN', 'PROJECT_MANAGER'])] }, MeetingController.inviteBot);
+  app.patch('/meetings/:id/expire', { preHandler: [authMiddleware, rbacMiddleware(['ADMIN', 'PROJECT_MANAGER'])] }, MeetingController.expire);
+  app.post('/meetings/:id/attendees', { preHandler: [authMiddleware, rbacMiddleware(['ADMIN', 'PROJECT_MANAGER'])] }, MeetingController.addAttendee);
   app.get('/meetings/:id/timeline', { preHandler: [authMiddleware] }, MeetingController.timeline);
   app.get('/meetings/:id/transcript', { preHandler: [authMiddleware] }, MeetingController.transcript);
   app.get('/meetings/:id/insights', { preHandler: [authMiddleware] }, MeetingController.insights);
