@@ -8,6 +8,57 @@ import { env } from '../../config/env.js';
 import fs from 'fs/promises';
 import path from 'path';
 
+export async function addAttendee(orgId: string, meetingId: string, email: string) {
+  const meeting = await (prisma as any).meeting.findFirst({
+    where: { id: meetingId, organizationId: orgId, deletedAt: null }
+  });
+  if (!meeting) throw new Error('Meeting not found');
+
+  const existing = await (prisma as any).attendee.findFirst({
+    where: { meetingId, email }
+  });
+  if (existing) {
+    return existing;
+  }
+
+  const user = await (prisma as any).user.findFirst({ where: { organizationId: orgId, email } });
+  const joined = !!user;
+
+  const created = await (prisma as any).attendee.create({
+    data: {
+      meetingId,
+      email,
+      name: email.split('@')[0],
+      userId: user ? user.id : null,
+      joined
+    }
+  });
+
+  if (!user) {
+    try {
+      const title = String(meeting.title || 'Meeting');
+      const when = meeting.scheduledTime ? new Date(meeting.scheduledTime).toLocaleString() : '';
+      const link = meeting.meetingLink || `${env.APP_URL}/meetings/${meetingId}`;
+
+      await sendMail({
+        to: email,
+        subject: `Meeting Invitation: ${title}`,
+        html: `
+          <h1>Meeting Invitation</h1>
+          <p>You have been invited to <strong>${title}</strong></p>
+          ${when ? `<p><strong>Time:</strong> ${when}</p>` : ''}
+          <p><strong>Join here:</strong> <a href="${link}">${link}</a></p>
+        `
+      });
+    } catch (e: any) {
+      console.warn('[meetings] addAttendee: email send failed', e?.message);
+    }
+  }
+
+  await audit(orgId, 'meeting.add_attendee', undefined, { meetingId, email, joined });
+  return created;
+}
+
 export async function createMeeting(userId: string, input: CreateMeetingInput, creatorEmail?: string) {
   if (!input.projectId) {
     throw new Error('projectId required');
@@ -240,12 +291,39 @@ export async function rescheduleMeeting(orgId: string, id: string, input: Resche
     where: { id }, 
     data: { 
       scheduledTime,
+      status: 'scheduled',
+      botStatus: 'ready',
       updatedAt: new Date()
     } 
   });
   
   await audit(orgId, 'meeting.reschedule', undefined, { meetingId: id, newTime: scheduledTime });
   return meeting;
+}
+
+export async function expireMeeting(orgId: string, id: string) {
+  const meeting = await (prisma as any).meeting.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null }
+  });
+
+  if (!meeting) throw new Error('Meeting not found');
+
+  // Safety: If meeting already completed or has transcript, do not mark expired
+  if (meeting.status === 'ended' || meeting.status === 'ready' || meeting.transcriptStatus === 'completed') {
+    return meeting;
+  }
+
+  const updated = await (prisma as any).meeting.update({
+    where: { id },
+    data: { 
+      status: 'expired',
+      botStatus: null, // Reset bot status if expired
+      updatedAt: new Date()
+    }
+  });
+
+  await audit(orgId, 'meeting.expired', undefined, { meetingId: id });
+  return updated;
 }
 
 export async function inviteBot(orgId: string, id: string) {
