@@ -1,7 +1,7 @@
 import { prisma } from '../../prisma/client.js';
 import { TaskPriority, TaskStatus } from '@prisma/client';
 
-export async function bulkCreateTasks(projectId: string, tasks: any[]) {
+export async function bulkCreateTasks(projectId: string, tasks: any[], meetingId?: string) {
   try {
     let tasksCreated = 0;
     let tasksUpdated = 0;
@@ -61,6 +61,13 @@ export async function bulkCreateTasks(projectId: string, tasks: any[]) {
           status,
           assigneeUserId: task.assigneeUserId || null
         }
+      });
+    }
+
+    if (meetingId) {
+      await (prisma as any).meeting.update({
+        where: { id: meetingId },
+        data: { status: 'COMPLETED' }
       });
     }
 

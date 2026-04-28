@@ -25,8 +25,14 @@ export const logoutSchema = z.object({
   refreshToken: z.string().min(1).optional()
 });
 
+export const verifyOTPSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6)
+});
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;
+export type VerifyOTPInput = z.infer<typeof verifyOTPSchema>;
