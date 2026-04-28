@@ -10,8 +10,8 @@ export const TaskController = {
     const parsed = bulkCreateTasksSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Validation failed' });
 
-    const { projectId, tasks } = parsed.data;
-    const result = await bulkCreateTasks(projectId, tasks);
+    const { projectId, tasks, meetingId } = parsed.data;
+    const result = await bulkCreateTasks(projectId, tasks, meetingId);
     return reply.code(201).send(result);
   },
 };

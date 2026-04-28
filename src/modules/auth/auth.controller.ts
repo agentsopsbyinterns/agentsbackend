@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { env, isProd } from '../../config/env.js';
-import { forgotPassword, login, me, refresh, resetPassword, signup, logout, verifyEmail } from './auth.service.js';
-import { forgotPasswordSchema, loginSchema, resetPasswordSchema, signupSchema, logoutSchema } from './auth.schema.js';
+import { forgotPassword, login, me, refresh, resetPassword, signup, logout, verifyOTP } from './auth.service.js';
+import { forgotPasswordSchema, loginSchema, resetPasswordSchema, signupSchema, logoutSchema, verifyOTPSchema } from './auth.schema.js';
 import { unauthorized } from '../../common/errors/api-error.js';
 
 function setRefreshCookie(reply: FastifyReply, value: string) {
@@ -36,24 +36,29 @@ export const AuthController = {
         projectId: body.projectId,
         token: body.token
       });
-      // Verification logic: Do NOT set refresh cookie yet, as they are not logged in
       return reply.send({ user: result.user, message: result.message });
     } catch (err: any) {
       console.error('Signup error:', err);
-      return reply.status(err.status || 500).send({ error: err.message || 'Signup failed' });
+      return reply.status(err.statusCode || 500).send({ error: err.message || 'Signup failed' });
     }
   },
-  verifyEmail: async (request: FastifyRequest, reply: FastifyReply) => {
-    const { token } = request.query as { token: string };
-    if (!token) {
-      return reply.status(400).send({ error: 'Verification token is required' });
+  verifyOTP: async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = request.body as any;
+    const parsed = verifyOTPSchema.safeParse(body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten() });
     }
     try {
-      await verifyEmail(token);
-      return reply.send({ success: true, message: 'Email verified successfully' });
+      const result = await verifyOTP(parsed.data.email, parsed.data.otp);
+      setRefreshCookie(reply, result.refreshCookieValue);
+      return reply.send({ 
+        user: result.user, 
+        accessToken: result.accessToken,
+        message: 'Email verified successfully' 
+      });
     } catch (err: any) {
-      console.error('Email verification error:', err);
-      return reply.status(err.status || 400).send({ error: err.message || 'Email verification failed' });
+      console.error('OTP verification error:', err);
+      return reply.status(err.statusCode || 400).send({ error: err.message || 'Verification failed' });
     }
   },
   login: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -72,7 +77,7 @@ export const AuthController = {
       return reply.send({ user: result.user, accessToken: result.accessToken });
     } catch (err: any) {
       console.error('Login error:', err);
-      return reply.status(err.status || 401).send({ error: err.message || 'Login failed' });
+      return reply.status(err.statusCode || 401).send({ error: err.message || 'Login failed' });
     }
   },
   logout: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -90,12 +95,16 @@ export const AuthController = {
   },
   refresh: async (request: FastifyRequest, reply: FastifyReply) => {
     const cookie = (request as any).cookies?.[env.REFRESH_COOKIE_NAME];
-    if (!cookie) throw unauthorized('Missing refresh token');
+    if (!cookie) return reply.send({ accessToken: null });
     try {
       const result = await refresh(cookie);
       setRefreshCookie(reply, result.newRefresh);
       return reply.send({ accessToken: result.accessToken });
     } catch (err: any) {
+      if (err.status === 401) {
+        clearRefreshCookie(reply);
+        return reply.send({ accessToken: null });
+      }
       return reply.status(503).send({ error: 'Database unavailable', code: 'DB_UNAVAILABLE' });
     }
   },

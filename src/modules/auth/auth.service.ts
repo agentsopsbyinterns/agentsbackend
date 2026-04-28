@@ -16,8 +16,8 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
   }
 
   const passwordHash = await hashPassword(input.password);
-  const verificationToken = crypto.randomBytes(32).toString('hex');
-  const verificationExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const verificationExpires = new Date(Date.now() + 1000 * 60 * 10); // 10 minutes for OTP
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     let orgId = input.organizationId;
@@ -54,7 +54,7 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
         passwordHash,
         organizationId: orgId,
         globalRole: orgId ? 'TEAM_MEMBER' : 'ADMIN',
-        verificationToken,
+        verificationToken: otp,
         verificationExpires,
         isVerified: false
       }
@@ -88,48 +88,45 @@ export async function signup(input: SignupInput & { organizationId?: string; pro
     return { org, user };
   });
 
-  const verifyUrl = `${env.APP_URL}/verify-email?token=${verificationToken}`;
   await sendMail({
     to: result.user.email,
     subject: "Verify your email - AgentOps AI",
     html: `
       <h2>Email Verification</h2>
-      <p>Thank you for signing up! Please click the link below to verify your email address:</p>
-      <p><a href="${verifyUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Email</a></p>
-      <p>This link will expire in 24 hours.</p>
+      <p>Thank you for signing up! Your verification code is:</p>
+      <h1 style="font-size: 32px; letter-spacing: 5px; color: #4f46e5; text-align: center; background: #f3f4f6; padding: 20px; border-radius: 8px;">${otp}</h1>
+      <p>This code will expire in 10 minutes.</p>
     `
   });
 
   return {
     user: sanitizeUser(result.user),
-    message: 'Check your email to verify your account'
+    message: 'Check your email for the verification code'
   };
 }
 
-export async function verifyEmail(token: string) {
-  // Find user by token even if expired to provide a better message
-  const user = await prisma.user.findFirst({
-    where: { 
-      verificationToken: token
-    }
+export async function verifyOTP(email: string, otp: string) {
+  const user = await prisma.user.findUnique({
+    where: { email }
   });
 
   if (!user) {
-    // If we don't find the user, it's either invalid or already verified (token cleared)
-    // To handle idempotency, we can't easily know if this specific token was just used.
-    // But we'll follow the requirement to be graceful if we can.
-    throw badRequest('Invalid or expired verification token');
+    throw notFound('User not found');
   }
 
   if (user.isVerified) {
-    return { success: true, message: 'Email already verified' };
+    throw badRequest('Email already verified. Please log in.');
+  }
+
+  if (user.verificationToken !== otp) {
+    throw badRequest('Invalid verification code');
   }
 
   if (user.verificationExpires && user.verificationExpires < new Date()) {
-    throw badRequest('Verification token expired');
+    throw badRequest('Verification code expired');
   }
 
-  await prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id: user.id },
     data: {
       isVerified: true,
@@ -138,7 +135,20 @@ export async function verifyEmail(token: string) {
     }
   });
 
-  return { success: true };
+  const accessToken = signAccessToken({
+    sub: updatedUser.id,
+    email: updatedUser.email,
+    organizationId: updatedUser.organizationId,
+    globalRole: (updatedUser as any).globalRole || 'TEAM_MEMBER'
+  });
+  const rawRefresh = generateRandomToken(32);
+  const refreshHash = sha256(rawRefresh);
+  const refreshExpires = new Date(Date.now() + parseDuration(env.REFRESH_TOKEN_TTL));
+  await prisma.refreshToken.create({
+    data: { userId: updatedUser.id, tokenHash: refreshHash, expiresAt: refreshExpires }
+  });
+
+  return { user: sanitizeUser(updatedUser), accessToken, refreshCookieValue: rawRefresh };
 }
 
 export async function login(input: LoginInput & { projectId?: string; token?: string }) {
