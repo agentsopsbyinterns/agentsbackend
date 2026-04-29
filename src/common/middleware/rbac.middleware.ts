@@ -40,17 +40,11 @@ export function rbacMiddleware(roles: Array<ProjectRole>) {
         })
       ]);
 
-      const globalRole = (request.user as any).globalRole;
-      const normalizedGlobal = mapLegacyRole(globalRole);
       const isOwner = project?.createdById === request.user.id;
 
       if (membership) {
         userRole = mapLegacyRole(membership.projectRole);
         console.log(`[RBAC] Resolved project role for user ${request.user.id} on project ${projectId}: ${userRole}`);
-      } else if (normalizedGlobal === PROJECT_ROLES.ADMIN) {
-        // Global admin bypass
-        console.log(`[RBAC] Global ADMIN access granted for user ${request.user.id} on project ${projectId}`);
-        return;
       } else if (isOwner) {
         // Project owner (creator) bypass - give them ADMIN access on their project
         userRole = PROJECT_ROLES.ADMIN;
@@ -126,14 +120,7 @@ export function requireProjectRole(allowedRoles: Array<ProjectRole>) {
       })
     ]);
 
-    const globalRole = (request.user as any).globalRole;
-    const normalizedGlobal = mapLegacyRole(globalRole);
     const isOwner = project?.createdById === userId;
-
-    if (normalizedGlobal === PROJECT_ROLES.ADMIN) {
-      console.log(`[RBAC] Global ADMIN access granted for user ${userId}`);
-      return;
-    }
 
     if (isOwner) {
       console.log(`[RBAC] Project OWNER access granted for user ${userId} on project ${projectId}`);

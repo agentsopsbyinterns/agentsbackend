@@ -4,13 +4,14 @@ import { globalSearch } from './search.service.js';
 export async function handleGlobalSearch(request: FastifyRequest, reply: FastifyReply) {
   const { q } = request.query as { q: string };
   const orgId = request.organizationId;
+  const userId = request.user?.id;
 
-  if (!orgId) {
+  if (!orgId || !userId) {
     return reply.status(401).send({ error: 'Unauthorized' });
   }
 
   try {
-    const results = await globalSearch(orgId, q);
+    const results = await globalSearch(orgId, userId, q);
     return reply.send(results);
   } catch (error: any) {
     request.log.error(error);

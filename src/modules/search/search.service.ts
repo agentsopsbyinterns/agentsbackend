@@ -1,6 +1,6 @@
 import { prisma } from '../../prisma/client.js';
 
-export async function globalSearch(orgId: string, query: string) {
+export async function globalSearch(orgId: string, userId: string, query: string) {
   if (!query) {
     return { projects: [], meetings: [] };
   }
@@ -10,6 +10,11 @@ export async function globalSearch(orgId: string, query: string) {
       where: {
         organizationId: orgId,
         deletedAt: null,
+        members: {
+          some: {
+            userId
+          }
+        },
         OR: [
           { name: { contains: query } },
           { client: { contains: query } },
@@ -28,6 +33,13 @@ export async function globalSearch(orgId: string, query: string) {
       where: {
         organizationId: orgId,
         deletedAt: null,
+        project: {
+          members: {
+            some: {
+              userId
+            }
+          }
+        },
         OR: [
           { title: { contains: query } },
           { agenda: { contains: query } }

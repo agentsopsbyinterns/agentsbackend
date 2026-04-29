@@ -22,8 +22,8 @@ export async function listProjects(orgId: string, skip: number, take: number, fi
     AND: [] 
   };
 
-  // Filter by user membership if specifically requested
-  if (filters?.userId && filters?.assignedToMe === true) {
+  // Project membership is the source of truth for project visibility.
+  if (filters?.userId) {
     where.AND.push({
       members: {
         some: {
@@ -406,7 +406,7 @@ export async function detectProjectTaskChanges(projectId: string, newMeetingTask
 
 export async function listMyProjects(userId: string) {
   const memberships = await (prisma as any).projectMember.findMany({
-    where: { userId },
+    where: { userId, project: { deletedAt: null } },
     include: {
       project: {
         include: {
@@ -441,7 +441,8 @@ export async function listMyProjects(userId: string) {
       tasksTotal,
       tasksCompleted,
       asanaLink: p.asanaLink,
-      updatedAt: p.updatedAt
+      updatedAt: p.updatedAt,
+      createdAt: p.createdAt
     }, m.projectRole);
   }));
 
