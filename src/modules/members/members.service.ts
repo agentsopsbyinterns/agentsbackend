@@ -327,7 +327,12 @@ export async function acceptProjectInvite(token: string, userId?: string) {
 
     console.log(`[INVITE ACCEPTANCE SUCCESS] User: ${userId}, Project: ${invite.projectId}, Role: ${projectRole}`);
 
-    return { success: true, projectId: invite.projectId };
+    return {
+      success: true,
+      projectId: invite.projectId,
+      projectName: project.name,
+      projectRole
+    };
   }
 
   // If userId is NOT provided, we are just verifying the invite (GET request)
